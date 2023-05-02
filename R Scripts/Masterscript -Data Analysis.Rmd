@@ -242,7 +242,7 @@ ST <- ggplot(data_03, aes(x = pop_ST, y = avg_masked_rad_2012)) +
 caste_scatterplot <- ggarrange(General_OBC, SC, ST, nrow = 1, ncol = 3)
 caste_scatterplot
 # Save the grob object as a PDF file
-ggsave(file.path("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output",  "scattercaste.pdf"), plot = caste_scatterplot, device = "pdf")
+ggsave(file.path("./Output",  "scattercaste.pdf"), plot = caste_scatterplot, device = "pdf")
 
 
 #For Religion
@@ -287,200 +287,7 @@ Other_religions <- ggplot(data_03, aes(x = pop_otherrel, y = avg_masked_rad_2012
 
 rel <- ggarrange(Hindu, Muslim, Other_religions, nrow = 1, ncol = 3)
 rel
-ggsave(file.path("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output",  "scatterrel.png"), plot = rel, device = "png")
-```
-
-##Step 4: Plotting: SC, ST population per state
-```{r ST/SC_state, fig.width=7,fig.height=6, fig.cap = "SC and ST population- All states", echo = FALSE, results='hide', warning=FALSE }
-
-data_03 %>% 
-  group_by(state_name, state_id) %>% 
-  summarise(
-    pop_ST= mean(pop_ST, na.rm=TRUE),
-    pop_SC= mean(pop_SC, na.rm=TRUE)) %>% 
-  
-    pivot_longer(c("pop_ST", "pop_SC"), names_to = "pop", values_to = "val") %>% 
-  ggplot(aes(y=val, x=pop, color = pop)) +
-  geom_point() +
-  facet_wrap(~state_name, scales = "free", ncol=5) +
-  scale_fill_brewer(palette="Set2")
-
-# Plot proportions of SC, ST for each state separately
-data_03 %>% 
-  group_by(state_name, state_id) %>% 
-  summarise(
-    pop_ST_prop= mean(st_ratio, na.rm=TRUE),
-    pop_SC_prop= mean(sc_ratio, na.rm=TRUE)) %>% 
-  
-    pivot_longer(c("pop_ST_prop", "pop_SC_prop"), names_to = "pop", values_to = "val") %>% 
-  ggplot(aes(y=val, x=pop, color = pop)) +
-  geom_point() +
-  facet_wrap(~state_name, scales = "free", ncol=5) +
-  scale_fill_brewer(palette="Set2")
-
-
-# Plot means of SC for all states
-data_03 %>% 
-  group_by(state_name, state_id) %>% 
-  summarise(pop_ST= mean(pop_ST, na.rm=TRUE)) %>% 
-  
-  ggplot(aes(y=pop_ST, x=state_id, color = state_name)) +
-  geom_point() +
-  geom_text_repel(aes(label = state_name)) +
-  scale_fill_brewer(palette="Set2") +
-  labs(x = "State ID", y="Mean of ST population", col="State name")
-
-# Plot proportions of ST population for all states
-data_03 %>% 
-  group_by(state_name, state_id) %>% 
-  summarise(pop_ST_prop= mean(st_ratio, na.rm=TRUE)) %>% 
-  
-  ggplot(aes(y=pop_ST_prop, x=state_id, color = state_name)) +
-  geom_point() +
-  geom_text_repel(aes(label = state_name)) +
-  scale_fill_brewer(palette="Set2") +
-  labs(x = "State ID", y="Proportion of ST population", col="State name") 
-
-# Plot means of SC for all states
-data_03 %>% 
-  group_by(state_name, state_id) %>% 
-  summarise(pop_SC= mean(pop_SC, na.rm=TRUE)) %>% 
-  
-  ggplot(aes(y=pop_SC, x=state_id, color = state_name)) +
-  geom_point() +
-  geom_text_repel(aes(label = state_name)) +
-  scale_fill_brewer(palette="Set2") +
-  labs(x = "State ID", y="Mean of SC population", col="State name")
-
-# Plot proportions of SC population for all states
-data_03 %>% 
-  group_by(state_name, state_id) %>% 
-  summarise(pop_SC_prop= mean(sc_ratio, na.rm=TRUE)) %>% 
-  
-  ggplot(aes(y=pop_SC_prop, x=state_id, color = state_name)) +
-  geom_point() +
-  geom_text_repel(aes(label = state_name)) +
-  scale_fill_brewer(palette="Set2") +
-  labs(x = "State ID", y="Proportion of SC population", col="State name") 
-  
-
-
-```
-
-##Step 5: Plotting: Literate population per state
-```{r descr_literate_state, fig.width=7,fig.height=6, fig.cap = "SC and ST population- All states", echo = FALSE, results='hide', warning=FALSE }
-
-# Plot means of literate population for all states
-data_03 %>% 
-  group_by(state_name, state_id) %>% 
-  summarise(pop_literate= mean(pop_literate, na.rm=TRUE)) %>% 
-  
-  ggplot(aes(y=pop_literate, x=state_id, color = state_name)) +
-  geom_point() +
-  geom_text_repel(aes(label = state_name)) +
-  scale_fill_brewer(palette="Set2") +
-  labs(x = "State ID", y="Mean of literate population", col="State name")
-
-# Plot proportions of literate population for all state
-data_03 %>% 
-  group_by(state_name, state_id) %>% 
-  summarise(pop_lit_prop= mean(lit_ratio, na.rm=TRUE)) %>% #have to run data_prep doc once more to include lit ratio here
-  
-  ggplot(aes(y=pop_lit_prop, x=state_id, color = state_name)) +
-  geom_point() +
-  geom_text_repel(aes(label = state_name)) +
-  scale_fill_brewer(palette="Set2") +
-  labs(x = "State ID", y="Proportion of literate population", col="State name") 
-
-
-```
-
-#4. External Validity - Correlational Analysis
-```{r}
-ev_data <- read_csv("./Data/CEEW - IRES Data.csv")
-ev_data <- subset(ev_data, ev_data$s_code==8 | ev_data$s_code==9 | ev_data$s_code==24 | ev_data$s_code==23)
-ev_data_01 <- ev_data %>%
-  dplyr::select(s_name, s_code, d_name, d_code, q315_a_bill_mar_jun, q315_b_bill_jul_oct, q315_c_bill_nov_feb)
-
-ev_data_02 <- subset(ev_data_01, ev_data_01$q315_a_bill_mar_jun>0 & ev_data_01$q315_b_bill_jul_oct>0 & ev_data_01$q315_c_bill_nov_feb>0)
-
-ev_data_03 <- ev_data_02 %>%
-  group_by(s_name, s_code, d_name, d_code) %>%
-  dplyr::summarise(q315_a_bill_mar_jun = round(mean(q315_a_bill_mar_jun)),
-            q315_b_bill_jul_oct = round(mean(q315_b_bill_jul_oct)),
-            q315_c_bill_nov_feb = round(mean(q315_c_bill_nov_feb))) 
-
-ev_data_04 <- ev_data_03 %>%
-  mutate(total_spend = sum(q315_a_bill_mar_jun, q315_b_bill_jul_oct, q315_c_bill_nov_feb)) %>%
-  rename(district_id = d_code)
-
-thesis_data <- read_csv("./Data/thesis_data.csv")
-thesis_data <- thesis_data %>%
-  dplyr::select(state_id, district_id, state_name, district_name, avg_masked_rad_2019) %>%
-  group_by(state_id, district_id, state_name, district_name) %>%
-  dplyr::summarise(avg_masked_rad_2019 = round(mean(avg_masked_rad_2019),8)) %>%
-  mutate(log_rad_2019 = log1p(avg_masked_rad_2019))
-
-final_data <- left_join(ev_data_04, thesis_data, by = "district_id") 
-final_data <- subset(final_data , final_data$avg_masked_rad_2019!="NA") 
-
-# Calculate correlation between variables - Pearson's r
-correlation <- cor.test(final_data$total_spend, final_data$log_rad_2019)
-
-# Create scatterplot with smoother line
-ggplot(final_data, aes(x = total_spend, y = log_rad_2019)) +
-    geom_jitter() +
-    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
-    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
-                "dashed") +
-    theme_base() +
-  labs(x = "Annual Electricity Spending", y = "Log of Nightlight Radiance Values",
-       title = paste("Correlation =", round(correlation, 2)))
-
-# Calculate correlation between variables - Spearman's Rank correlation
-correlation_spearman <- cor.test(final_data$total_spend, final_data$log_rad_2019, method = "spearman")
-
-# State wise spearman coefficients
-final_data_UP <- subset(final_data , final_data$s_code==9) 
-correlation_UP <- cor(final_data_UP$total_spend, final_data_UP$log_rad_2019)
-correlation_UP_spearman <- cor(final_data_UP$total_spend, final_data_UP$log_rad_2019, method = "spearman")
-ggplot(final_data_UP, aes(x = total_spend, y = log_rad_2019)) +
-    geom_jitter() +
-    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
-    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
-                "dashed") +
-    theme_base()
-
-final_data_MP <- subset(final_data , final_data$s_code==23) 
-correlation_MP <- cor(final_data_MP$total_spend, final_data_MP$log_rad_2019)
-correlation_MP_spearman <- cor(final_data_MP$total_spend, final_data_MP$log_rad_2019, method = "spearman")
-ggplot(final_data_MP, aes(x = total_spend, y = log_rad_2019)) +
-    geom_jitter() +
-    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
-    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
-                "dashed") +
-    theme_base()
-
-final_data_Guj <- subset(final_data , final_data$s_code==24) 
-correlation_Guj <- cor(final_data_Guj$total_spend, final_data_Guj$log_rad_2019)
-correlation_Guj_spearman <- cor(final_data_Guj$total_spend, final_data_Guj$log_rad_2019, method = "spearman")
-ggplot(final_data_Guj, aes(x = total_spend, y = log_rad_2019)) +
-    geom_jitter() +
-    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
-    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
-                "dashed") +
-    theme_base()
-
-final_data_Raj <- subset(final_data , final_data$s_code==8) 
-correlation_Raj <- cor(final_data_Raj$total_spend, final_data_Raj$log_rad_2019)
-correlation_Raj_spearman <- cor(final_data_Raj$total_spend, final_data_Raj$log_rad_2019, method = "spearman")
-ggplot(final_data_Raj, aes(x = total_spend, y = log_rad_2019)) +
-    geom_jitter() +
-    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
-    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
-                "dashed") +
-    theme_base()
-
+ggsave(file.path("./Output",  "scatterrel.png"), plot = rel, device = "png")
 ```
 
 #5. Regression Analysis - OLS
@@ -558,7 +365,7 @@ density<- dist_var %>%
   ggtitle("Density Plots", "Pre- and Post-Log Transformation")
 
 density
-ggsave(file.path("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output",  "density.png"), plot = density, device = "png")
+ggsave(file.path("./Output",  "density.png"), plot = density, device = "png")
 
 
 ```
@@ -600,21 +407,21 @@ NTLlinear <- ggarrange(l1 + rremove("xlab"), l2 + rremove("xlab"), l3,
                        align = "hv", 
                     font.label = list(size = 10, color = "black"))
 
-ggsave(file.path("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output",  "NTLlinear.png"), plot = NTLlinear, device = "png")
+ggsave(file.path("./Output",  "NTLlinear.png"), plot = NTLlinear, device = "png")
 
 ##2. Tests for Models
 
 #Model 1: By Caste -------------------##SC+ ST+ General & OBC
 model1 <- lm(log_avg_masked_rad_2012 ~ log_SC + log_ST + log_others, (data = data_03))
 
-png("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output/OLSmodel1.png")
+png("./Output/OLSmodel1.png")
 par(mfrow=c(2,2))
 plot(model1)
 dev.off()
 
 #Model 2: By Religion-----------------##Muslim + Other+ Hindu
 model2 <- lm(log_avg_masked_rad_2012 ~ log_muslim+log_otherrel+log_hindu, (data = data_03))
-png("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output/OLSmodel2.png")
+png("./Output/OLSmodel2.png")
 par(mfrow=c(2,2))
 plot(model2)
 dev.off()
@@ -623,7 +430,7 @@ bptest(log_avg_masked_rad_2012 ~ log_muslim+log_otherrel+log_hindu, data = data_
 
 #Model 3: By Minorities---------------##SC+ ST + Muslim + Other Religions
 model3 <- lm(log_avg_masked_rad_2012 ~ log_SC + log_ST + log_muslim+ log_otherrel, (data = data_03))
-png("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output/OLSmodel3.png")
+png("./Output/OLSmodel3.png")
 par(mfrow=c(2,2))
 plot(model3)
 dev.off()
@@ -1373,7 +1180,7 @@ plot1 <- ggplot(d1,aes(x = year, y = beta)) +
   theme_classic()
 plot1
 
-ggsave(file.path("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output",  "feminority.png"), plot = plot1, device = "png")
+ggsave(file.path("./Output",  "feminority.png"), plot = plot1, device = "png")
 ```
 
 
