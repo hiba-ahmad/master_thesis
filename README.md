@@ -1,9 +1,10 @@
-# Working with dplyr
+# Joint Master Thesis - Born into Darkness? Estimating Social Inequity in Electricity Consumption in India based on
+Caste and Religion
 
 
 ## Summary
 
-This repository provides materials for a session that is part of the [I2DS Tools for Data Science workshop](https://github.com/intro-to-data-science-22-workshop) run at the [Hertie School, Berlin](https://www.hertie-school.org/en/) in November 2022. The student-run workshop is part of the course [Introduction to Data Science](https://github.com/intro-to-data-science-22) taught by Simon Munzert at the Hertie School, Berlin, in Fall 2022.
+This repository provides materials for our master thesis written as a part of the Master in Public Policy at Hertie School. Please note that neither the institution nor the examiners are responsible for the theories and methods used, or results and conclusions drawn in this work.
 
 ### Session contents
 
@@ -14,10 +15,10 @@ This session will introduce you to the modern data wrangling workflow with R and
 The goals of this session are to (1) equip you with conceptual knowledge about the dplyr package and data wrangling workflow, (2) show you the three key verbs of the pacakge, and (3) provide you with practice material as well as some further readings.
 
 
-## Instructors
+## Authors
 
-- Simon Munzert ([website](http://simonmunzert.github.io/), [twitter](https://twitter.com/simonsaysnothin))
-- Kermit the Frog ([website](https://en.wikipedia.org/wiki/Kermit_the_Frog), [twitter](https://twitter.com/KermitTheFrog))
+- Hiba Ahmad 
+- Shefali Roy 
 
 
 ## Further resources
