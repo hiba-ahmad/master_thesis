@@ -1,0 +1,1173 @@
+---
+title: "Masterscript - Data Preparation"
+author: "Hiba Ahmad, Shefali Roy"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+#Index:
+1. Load Packages
+2. Prepare Nightlight Data
+3. Prepare Census Data
+4. Add Sub-district level data on religion and sex
+5. Merge Appended Census Data and Nightlight Data
+6. Create State-wise Panel Data (2012-2021)
+
+#1. Load Packages
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(Rcpp)
+library(raster)
+library(sf)
+library(haven)
+library(tidyr)
+library(utils)
+library(R.utils)
+library(tidyverse)
+library(readr)
+library(xtable)
+library(stargazer)
+library(mgcv)
+library(ggpubr)
+library(ggplot2)
+library(plm)
+library(countrycode)
+library(haven)
+library(readr)
+library(dplyr)
+library(openxlsx)
+library(stringr)
+library(readxl)
+library(data.table)
+library(vroom)
+```
+
+
+#2. Prepare Nightlight Data
+
+##Step 1: Prepare Shapefile
+
+###Note: This step requires you to first download the India shapefile from the SHRUG website (https://www.devdatalab.org/shrug_download/shrug_select)
+
+```{r}
+
+# Import India shape file at sub-district level 
+ind_shape <- st_read("./Data/Shapefiles/geometries_shrug-v1/subdistrict.shp")
+
+# Convert shape file into an sf object
+ind_sf <- as(ind_shape, "sf") 
+
+```
+
+
+##Step 2: Cut down Global TIFF files to India coordinates (including islands)
+
+###Note 1: This step requires you to first download the the average masked radiance TIFF file for each year from 2012 to 2021 from the Annual VNL V2.1 dataset on Earth Observation Group's website (https://eogdata.mines.edu/nighttime_light/annual/v21/)
+###Note 2: Run this chunk only once to save India shaped TIFF files, load those to R for future analysis
+###Note 3: Unless you have a super fast computer, run the following chunk manually for each of the 10 global TIFF files for each year from 2012 to 2021 by replacing the name of the file (loop doesn't work). The code for one file is shown below.
+ 
+```{r eval = FALSE}
+
+# Read in the .tif file
+tif <- raster("VNL_v21_npp_2021_global_vcmslcfg_c202205302300.lit_mask.dat.tif")
+
+# Set the extent to India (including islands)
+india_extent <- extent(62.0, 100.0, 6.0, 37.0)
+tif_india <- crop(tif, india_extent)
+
+# Save the cropped image as a new .tif file
+writeRaster(tif_india, "india_VNL_v21_npp_2021_global_vcmslcfg_c202205302300.lit_mask.dat.tif", format = "GTiff", overwrite = TRUE)
+
+# Delete the original .tif file
+file.remove("VNL_v21_npp_2021_global_vcmslcfg_c202205302300.lit_mask.dat.tif")
+
+```
+
+
+##Step 3: Extract nightlight radiance values for each year to shapefile
+
+###Note 1: Run this chunk only once to save the dataframes with extracted nightlight values as R objects, load those to R for future analysis 
+###Note 2: If you have a super fast computer, you can try using the loop below to do the same more efficiently
+
+```{r eval = FALSE}
+
+# 2012
+
+## Append .tif file into raster data
+stack_2012 <- stack(list_2012)
+
+## Extract nightlight intensity on coordinates
+data_2012 <- cbind(st_drop_geometry(ind_sf),
+                                      raster::extract(stack_2012, ind_shape, fun=mean, df=TRUE, method="bilinear"))
+
+## Rename Layer Column
+data_2012 <- data_2012 %>% 
+  rename(
+    avg_masked_rad_2012 = layer.1,
+  )
+
+## Save data frame as an R object
+saveRDS(data_2012, "ntl_data_2012.RDS")
+
+## 2013
+
+## Append .tif file into raster data
+stack_2013 <- stack(list_2013)
+
+## Extract nightlight intensity on coordinates
+data_2013 <- cbind(st_drop_geometry(ind_sf),
+                   raster::extract(stack_2013, ind_shape, fun=mean, df=TRUE, method="bilinear"))
+
+## Rename Layer Column
+data_2013 <- data_2013 %>% 
+  rename(
+    avg_masked_rad_2013 = layer.1,
+  )
+
+## Save the data frame as an R object
+saveRDS(data_2013, "ntl_data_2013.RDS")
+
+## 2014
+
+## Append .tif file into raster data
+stack_2014 <- stack(list_2014)
+
+## Extract nightlight intensity on coordinates
+data_2014 <- cbind(st_drop_geometry(ind_sf),
+                   raster::extract(stack_2014, ind_shape, fun=mean, df=TRUE, method="bilinear"))
+
+## Rename Layer Column
+data_2014 <- data_2014 %>% 
+  rename(
+    avg_masked_rad_2014 = layer.1,
+  )
+
+## Save the data frame as an R object
+saveRDS(data_2014, "ntl_data_2014.RDS")
+
+## 2015
+
+## Append .tif file into raster data
+stack_2015 <- stack(list_2015)
+
+## Extract nightlight intensity on coordinates
+data_2015 <- cbind(st_drop_geometry(ind_sf),
+                   raster::extract(stack_2015, ind_shape, fun=mean, df=TRUE, method="bilinear"))
+
+## Rename Layer Column
+data_2015 <- data_2015 %>% 
+  rename(
+    avg_masked_rad_2015 = layer.1,
+  )
+
+## Save the data frame as an R object
+saveRDS(data_2015, "ntl_data_2015.RDS")
+
+## 2016
+
+## Append .tif file into raster data
+stack_2016 <- stack(list_2016)
+
+## Extract nightlight intensity on coordinates
+data_2016 <- cbind(st_drop_geometry(ind_sf),
+                   raster::extract(stack_2016, ind_shape, fun=mean, df=TRUE, method="bilinear"))
+
+## Rename Layer Column
+data_2016 <- data_2016 %>% 
+  rename(
+    avg_masked_rad_2016 = layer.1,
+  )
+
+## Save the data frame as an R object
+saveRDS(data_2016, "ntl_data_2016.RDS")
+
+## 2017
+
+## Append .tif file into raster data
+stack_2017 <- stack(list_2017)
+
+## Extract nightlight intensity on coordinates
+data_2017 <- cbind(st_drop_geometry(ind_sf),
+                   raster::extract(stack_2017, ind_shape, fun=mean, df=TRUE, method="bilinear"))
+
+## Rename Layer Column
+data_2017 <- data_2017 %>% 
+  rename(
+    avg_masked_rad_2017 = layer.1,
+  )
+
+## Save the data frame as an R object
+saveRDS(data_2017, "ntl_data_2017.RDS")
+
+## 2018
+
+## Append .tif file into raster data
+stack_2018 <- stack(list_2018)
+
+## Extract nightlight intensity on coordinates
+data_2018 <- cbind(st_drop_geometry(ind_sf),
+                   raster::extract(stack_2018, ind_shape, fun=mean, df=TRUE, method="bilinear"))
+
+## Rename Layer Column
+data_2018 <- data_2018 %>% 
+  rename(
+    avg_masked_rad_2018 = layer.1,
+  )
+
+## Save the data frame as an R object
+saveRDS(data_2018, "ntl_data_2018.RDS")
+
+## 2019
+
+## Append .tif file into raster data
+stack_2019 <- stack(list_2019)
+
+## Extract nightlight intensity on coordinates
+data_2019 <- cbind(st_drop_geometry(ind_sf),
+                   raster::extract(stack_2019, ind_shape, fun=mean, df=TRUE, method="bilinear"))
+
+## Rename Layer Column
+data_2019 <- data_2019 %>% 
+  rename(
+    avg_masked_rad_2019 = layer.1,
+  )
+
+## Save the data frame as an R object
+saveRDS(data_2019, "ntl_data_2019.RDS")
+
+## 2020
+
+## Append .tif file into raster data
+stack_2020 <- stack(list_2020)
+
+## Extract nightlight intensity on coordinates
+data_2020 <- cbind(st_drop_geometry(ind_sf),
+                   raster::extract(stack_2020, ind_shape, fun=mean, df=TRUE, method="bilinear"))
+
+## Rename Layer Column
+data_2020 <- data_2020 %>% 
+  rename(
+    avg_masked_rad_2020 = layer.1,
+  )
+
+## Save data frame as an R object
+saveRDS(data_2020, "ntl_data_2020.RDS")
+
+## 2021
+
+## Append .tif file into raster data
+stack_2021 <- stack(list_2021)
+
+## Extract nightlight intensity on coordinates
+data_2021 <- cbind(st_drop_geometry(ind_sf),
+                   raster::extract(stack_2021, ind_shape, fun=mean, df=TRUE, method="bilinear"))
+
+## Rename Layer Column
+data_2021 <- data_2021 %>% 
+  rename(
+    avg_masked_rad_2021 = layer.1,
+  )
+
+## Save data frame as an R object
+saveRDS(data_2021, "ntl_data_2021.RDS")
+
+#--------------------------------------
+
+# Loop for Extracting Nightlight Radiance Values for all years together(needs a fast computer)
+
+## Create an empty list to store data frames for each year
+#data_list <- list()
+
+## Loop through each year from 2012 to 2021
+#for (year in 2012:2021) {
+
+## Create a character vector of file paths for the current year
+#file_paths <- list.files(paste0(year), pattern = ".tif$", full.names = TRUE)
+
+## Stack the raster data
+#raster_stack <- stack(file_paths)
+
+## Extract mean nightlight intensity values
+#extracted_data <- cbind(st_drop_geometry(ind_sf),
+#                        raster::extract(raster_stack, ind_shape, fun = mean, df = TRUE, method = "bilinear"))
+
+## Clean column names
+#names(extracted_data) <- make.names(names(extracted_data))
+
+## Add the extracted data to the list of data frames
+#data_list[[year - 2011]] <- extracted_data
+#}
+
+## Merge all data frames into a single data frame
+#merged_data <- Reduce(function(x, y) merge(x, y, by = "GID_3"), data_list)
+
+## Export merged data as CSV file
+#write.csv(merged_data, "/Users/hibaahmad/Downloads/Hertie/Thesis/Data/India_nightlight_intensity.csv", row.names = FALSE)
+
+```
+
+
+#Step 4: Compile all R objects to create one nightlight dataset
+
+```{r}
+
+# Create a vector with the years of interest
+years <- 2012:2021
+
+# Loop through the years and read the corresponding RDS file
+for (year in years) {
+  file_path <- paste0("./Data/ntl_data_", year, ".rds")
+  assign(paste0("data_", year), readRDS(file_path))
+}
+
+# Create a list of data frames
+ntl_list <- list(data_2012, data_2013, data_2014, data_2015, data_2016, data_2017, data_2018, data_2019, data_2020, data_2021)
+
+# Merge the data frames by the common columns using a for loop
+for (i in 1:(length(ntl_list)-1)) {
+  if (i == 1) {
+    merged_dataset <- merge(ntl_list[[i]], ntl_list[[i+1]], by = c("pc11_s_id", "pc11_d_id", "pc11_sd_id", "sd_name", "ID"))
+  } else {
+    merged_dataset <- merge(merged_dataset, ntl_list[[i+1]], by = c("pc11_s_id", "pc11_d_id", "pc11_sd_id", "sd_name", "ID"))
+  }
+}
+
+```
+
+
+#3. Prepare Census Data
+
+##Step 1: Load Census data and keys from the SHRUG website (https://www.devdatalab.org/shrug_download/shrug_select)
+
+```{r}
+
+census_data <- read_csv("./Data/csv_shrug-v1/shrug-v1.5.samosa-pop-econ-census-csv/shrug_pc11.csv", show_col_types = FALSE)
+census_state_key <- read_csv("./Data/csv_shrug-v1/shrug-v1.5.samosa-keys-csv/shrug_pc11_state_key.csv", show_col_types = FALSE)
+census_district_key <- read_csv("./Data/csv_shrug-v1/shrug-v1.5.samosa-keys-csv/shrug_pc11_district_key.csv", show_col_types = FALSE)
+census_subdistrict_key <- read_csv("./Data/csv_shrug-v1/shrug-v1.5.samosa-keys-csv/shrug_pc11_subdistrict_key.csv", show_col_types = FALSE)
+census_urban_key <- read_csv("./Data/csv_shrug-v1/shrug-v1.5.samosa-keys-csv/shrug_pc11u_key.csv", show_col_types = FALSE)
+census_rural_key <- read_csv("./Data/csv_shrug-v1/shrug-v1.5.samosa-keys-csv/shrug_pc11r_key.csv", show_col_types = FALSE)
+
+```
+
+##Step 2: Merge Census data with keys
+
+```{r}
+
+cmerge1 <- left_join(census_state_key, census_data, by = "shrid")
+cmerge2 <- left_join(cmerge1, census_district_key, by = c("shrid", "pc11_state_id", "pc11_state_name"))
+cmerge3 <- left_join(cmerge2, census_subdistrict_key, by = c("shrid", "pc11_state_id", "pc11_state_name", "pc11_district_id", "pc11_district_name"))
+cmerge4 <- left_join(census_rural_key, census_urban_key, by = c("shrid", "pc11_state_id"), multiple = "all")
+pop_data <- left_join(cmerge4, cmerge3, by = c("shrid", "pc11_state_id", "pc11_district_id", "pc11_subdistrict_id"), multiple = "all")
+
+```
+
+
+##Step 3: Clean Census Data
+
+```{r}
+
+#Delete extra columns
+pop_data <- subset(pop_data, select = c("shrid", "pc11_state_id", "pc11_district_id", "pc11_subdistrict_id", "pc11_town_id", "pc11_village_id", "pc11_state_name", "pc11_district_name", "pc11_subdistrict_name", "pc11_pca_tot_p", "pc11_pca_tot_p_u", "pc11_pca_tot_p_r", "pc11_pca_p_st", "pc11_pca_p_sc", "pc11_pca_p_lit", "pc11_vd_area", "pc11_vd_power_all_sum", "pc11_vd_power_all_win", "pc11_vd_power_all","pc11_td_area"))
+
+##Rename columns in pop_data
+pop_data <- pop_data %>% 
+  rename_with(~ str_replace_all(., c(
+    "tot_p" = "total_pop",
+    "tot_p_u" = "pop_urban",
+    "tot_p_r" = "pop_rural",
+    "p_st" = "pop_ST",
+    "p_sc" = "pop_SC",
+    "p_lit" = "pop_literate", 
+    "vd_area" = "village_area_hectares", 
+    "vd_power_all_sum" = "power_use_all_sum", 
+    "vd_power_all_win" = "power_use_all_win", 
+    "vd_power_all" = "power_use_all",
+    "td_area" = "town_area_sqkms"
+  )))
+
+```
+
+##Step 4: Merge Census data with shape file
+
+```{r}
+
+# Make columns lowercase to match the pop_data
+ind_sf <- ind_sf %>%
+  mutate_at(vars(sd_name), tolower)
+
+# Rename columns in ind_sf
+ind_sf <- ind_sf %>% 
+  rename_with(~ str_replace_all(., c(
+    "pc11_s_id" = "pc11_state_id",
+    "pc11_d_id" = "pc11_district_id",
+    "pc11_sd_id" = "pc11_subdistrict_id",
+    "sd_name" = "pc11_subdistrict_name"
+  )))
+
+# Merge census data with shape file
+final_pop_data <- left_join(pop_data, ind_sf, by = c("pc11_state_id", "pc11_district_id", "pc11_subdistrict_id", "pc11_subdistrict_name"))
+
+# Rename columns
+final_pop_data <- final_pop_data %>% 
+  rename_with(~ str_replace_all(., c(
+    "pc11_" = "",
+    "pca_" = ""
+  )))
+
+#keep only states needed - uttar pradesh, rajasthan, gujarat, madhya pradesh
+final_pop_data <- final_pop_data %>% 
+  filter(state_name %in% c("gujarat", "rajasthan", "madhya pradesh", "uttar pradesh"))
+
+# Remove columns for geometry
+final_pop_data <- subset(final_pop_data, select = -c(geometry))
+
+#save as rdata
+save(final_pop_data, file = "./Data/pop_data.RData")
+
+# Export merged data as CSV file
+#vroom::vroom_write(final_pop_data, file = "./Data/pop_data.csv", delim = ",")
+write.csv(final_pop_data, file = "./Data/pop_data.csv", row.names = FALSE)
+
+
+
+```
+
+
+#4. Add Sub-district level data on religion and sex
+
+##Step 1: Prepare data for Rajasthan
+```{r state_data}
+
+# Load data
+raj <- read_excel("./Data/DDW08C-01 MDDS_Raj.xls")
+
+raj <- raj %>% rename(subdistrict_id = Tehsil,
+                       district_id = District,
+                      state_id = State)
+
+# Split data by category of total, rural, and urban
+  raj1<- dplyr::select(raj, Males, Females, Hindu, Muslim, Other_rel, subdistrict_id, Urban, district_id, state_id, Area_Name) 
+
+ raj1 <- raj1[raj1$Urban == "Total", ] 
+ raj2 <- subset(raj1, select = -c(Urban))
+
+# Generate uids - both numeric and string
+raj2  <- raj2  %>% mutate(uid = as.numeric(paste0(state_id, district_id, subdistrict_id)))
+
+# Order uid and suid to beginning of dataframe
+raj2 <- raj2 %>% dplyr::select(uid, everything())
+```
+
+##Step 2: Prepare data for Uttar Pradesh
+
+```{r}
+
+# Load data
+up <- read_excel("./Data/DDW09C-01 MDDS_UP.xls")
+up <- up %>% rename(subdistrict_id = Tehsil,
+                       district_id = District,
+                      state_id = State)
+
+# Split data by category of total, rural, and urban
+  up1<- dplyr::select(up, Males, Females, Hindu, Muslim, Other_rel, subdistrict_id, Urban, district_id, state_id, Area_Name) 
+
+ up1 <- up1[up1$Urban == "Total", ] 
+ up2 <- subset(up1, select = -c(Urban))
+
+# Generate uids - both numeric and string
+up2  <- up2  %>% mutate(uid = as.numeric(paste0(state_id, district_id, subdistrict_id)))
+
+# Order uid and suid to beginning of dataframe
+up2 <- up2 %>% dplyr::select(uid, everything())
+
+```
+
+##Step 3: Prepare data for Madhya Pradesh
+
+```{r}
+
+# Load data
+mp <- read_excel("./Data/DDW23C-01 MDDS_MP.xls")
+mp <- mp %>% rename(subdistrict_id = Tehsil,
+                       district_id = District,
+                      state_id = State)
+
+# Split data by category of total, rural and urban
+  mp1<- dplyr::select(mp, Males, Females, Hindu, Muslim, Other_rel, subdistrict_id, Urban, district_id, state_id, Area_Name) 
+
+ mp1 <- mp1[mp1$Urban == "Total", ] 
+ mp2 <- subset(mp1, select = -c(Urban))
+
+# Generate uids - both numeric and string
+mp2  <- mp2  %>% mutate(uid = as.numeric(paste0(state_id, district_id, subdistrict_id)))
+
+# Order uid and suid to beginning of dataframe
+mp2 <- mp2 %>% dplyr::select(uid, everything())
+
+```
+
+##Step 4: Prepare data for Gujarat
+
+```{r}
+
+# Load data
+guj <- read_excel("./Data/DDW24C-01 MDDS_Guj.xls")
+guj <- guj %>% rename(subdistrict_id = Tehsil,
+                       district_id = District,
+                      state_id = State)
+
+# Split data by category of total, rural, and urban
+  guj1<- dplyr::select(guj, Males, Females, Hindu, Muslim, Other_rel, subdistrict_id, Urban, district_id, state_id, Area_Name) 
+
+ guj1 <- guj1[guj1$Urban == "Total", ] 
+ guj2 <- subset(guj1, select = -c(Urban))
+
+# Generate uids - both numeric and string
+guj2  <- guj2  %>% mutate(uid = as.numeric(paste0(state_id, district_id, subdistrict_id)))
+
+# Order uid and suid to beginning of dataframe
+guj2 <- guj2 %>% dplyr::select(uid, everything())
+
+dplyr::n_distinct(guj2$Area_Name)
+
+n_occur <- data.frame(table(guj2$uid))
+guj2[guj2$uid %in% n_occur$Var1[n_occur$Freq > 1],]
+
+```
+
+
+##Step 5: Append datasets
+
+```{r eval = FALSE}
+
+state_data <- rbind(raj2, up2, mp2, guj2)
+
+write.csv(state_data, file="./Data/State.csv")
+#check uniqueness of uid
+
+```
+
+
+```{r}
+state_data <- read.csv("./Data/State.csv")
+any(duplicated(state_data$uid))
+```
+
+# Note: If values are not unique, i.e., the above returns TRUE, check for duplicate values using the code below
+#n_occur <- data.frame(table(state_data$uid))
+#duplicate_uid <- n_occur$uid[duplicated(n_occur$uid)]
+
+
+##Step 6: Clean final_pop_data (created above)
+
+```{r, echo=FALSE}
+#read data
+data_01 <- read_csv("./Data/pop_data.csv")
+
+# Remove columns for village id, town id, and shrid
+data_01 <- subset(data_01, select = -c(village_id, town_id, shrid))
+
+# Remove NAs from state, district, subdistrict, total pop, num households, power use domestic, power use all, power use sum, and power use win columns; not from pop_SC, pop_ST, village area, town area) that are mutually exclusive and would definitely have NAs
+data_02 <- data_01[complete.cases(data_01[, c("state_name",  "district_name",  "subdistrict_name" ,   "total_pop" , "power_use_all"   , "power_use_all_sum", "power_use_all_win")]), ]
+
+# Remove duplicate values of villages where values of all population and village area are the same
+dup_rows <- duplicated(data_02[, c("district_id", "subdistrict_id","pop_SC", "pop_ST", "total_pop", "village_area_hectares")])
+
+# Subset the data frame to keep only the unique rows
+data_03 <- data_02[!dup_rows, ]
+
+#Make all SC, ST, Literate, rural urban NAs O
+data_03 <- data_03 %>%
+  mutate_at(vars(total_pop_u), ~ifelse(is.na(.), 0, .))
+
+# Remove all cases where pop_sc + pop_st > total-pop at village level
+sum(data_03$pop_SC + data_03$pop_ST > data_03$total_pop) #no cases found
+
+#Aggregate to subdistrict level
+data_04 <- data_03 %>%
+  group_by(state_id, district_id, subdistrict_id, state_name, district_name, subdistrict_name) %>%
+  dplyr::summarise(pop_SC = round(sum(pop_SC)),
+            pop_ST = round(sum(pop_ST)),
+            total_pop = round(sum(total_pop)),
+            total_pop_u = round(sum(total_pop_u)),
+            total_pop_r = round(sum(total_pop_r)),
+            pop_literate = round(sum(pop_literate)),
+            village_area_hectares = round(sum(village_area_hectares),2),
+            town_area_sqkms = round(sum(town_area_sqkms),2),
+            power_use_all_sum = round(mean(power_use_all_sum)),
+            power_use_all_win = round(mean(power_use_all_win)),
+            power_use_all = round(mean(power_use_all))
+            )
+
+# Remove columns for urban and rural population since urban population is very little and for a large part of our sample, rural equals urban
+data_05<- subset(data_04, data_04$total_pop_u==0)
+data_05 <- subset(data_05, select = -c(total_pop_r, total_pop_u, town_area_sqkms))
+
+# Generate uids - both numeric and string
+data_05  <- data_05  %>% mutate(uid = as.numeric(paste0(state_id, district_id, subdistrict_id)))
+
+data_05$suid <- paste(data_05$state_name, data_05$district_name, data_05$subdistrict_name, sep = "-")
+
+# Order suid after uid in df
+data_05 <- data_05 %>% dplyr::select(uid, suid, everything())
+
+# Check for duplicates
+any(duplicated(data_05$uid))
+```
+
+##Step 7: Merge data_05 with state_data for religion and sex (created above)
+
+```{r, echo=FALSE}
+
+merged_pop_data <- merge(data_05, state_data[,c("uid", "Muslim", "Hindu", "Males", "Females", "Other_rel","Area_Name")], by = "uid", all.x=TRUE)
+
+
+# Rename variables for consistency
+merged_pop_data <- merged_pop_data %>% dplyr::rename(pop_male = Males,
+                                      pop_female = Females,
+                                      pop_hindu = Hindu,
+                                      pop_muslim = Muslim,
+                                      pop_otherrel = Other_rel)
+ 
+# Reposition variables 
+merged_pop_data <- merged_pop_data %>% dplyr::select(uid, suid, Area_Name, everything())
+merged_pop_data <- merged_pop_data %>% dplyr::select(uid:pop_literate, pop_muslim:pop_otherrel, everything())
+```
+
+
+##Step 8: Add  variable of other castes to the merged_pop_data
+
+```{r}
+
+# Add a new column for non-SC and non_ST population (total - SC - ST)
+merged_pop_data <- merged_pop_data %>%
+  mutate(pop_others = total_pop - pop_SC - pop_ST) 
+
+# Check if any other castes except ST SC are negative
+any(merged_pop_data$pop_others<0)
+sum(merged_pop_data$pop_SC + merged_pop_data$pop_ST > merged_pop_data$total_pop) #no cases found
+
+# Reposition Variables
+merged_pop_data <- merged_pop_data %>% dplyr::select(uid:subdistrict_name, total_pop, pop_others, everything())
+
+save(merged_pop_data, file ="./Data/merged_pop_data.RData")
+write.csv(merged_pop_data, file =".\\Data\\merged_pop_data.csv", row.names=FALSE)
+
+```
+
+##Step 9: Adjusting male, female, hindu, and muslim populations to the 2011 census using populatoin ratios at subdistrict level
+
+```{r}
+#Since the male + female population is greater than total pop, we calculate a new variable called total_pop_mf, then take proportions of male, female, hindu, and muslim from it (assuming the entire population to only be 2 genders), and then use those proportions to append the columns for male, female, hindu, and muslim using the original total_pop variable at subdistrict level
+
+#Pop ratios at subdistrict level - for variables added later
+merged_pop_data <- merged_pop_data %>%
+  group_by(subdistrict_id) %>%
+  mutate(total_pop_mf = sum(pop_male, pop_female),
+         male_ratio = pop_male/total_pop_mf,
+         female_ratio = pop_female/total_pop_mf,
+         otherrel_ratio = pop_otherrel/total_pop_mf,
+         hindu_ratio = pop_hindu/total_pop_mf,
+         muslim_ratio = pop_muslim/total_pop_mf)
+
+#Pop ratios at state level - for variables added later
+merged_pop_data <- merged_pop_data %>%
+  group_by(state_name) %>%
+  mutate(total_pop_mf = sum(pop_male, pop_female),
+         sd_male_ratio = pop_male/total_pop_mf,
+         sd_female_ratio = pop_female/total_pop_mf,
+         sd_otherrel_ratio = pop_otherrel/total_pop_mf,
+         sd_hindu_ratio = pop_hindu/total_pop_mf,
+         sd_muslim_ratio = pop_muslim/total_pop_mf)
+
+#Creating new pop muslim and new pop hindu
+merged_pop_data <- merged_pop_data %>%
+  group_by(subdistrict_id) %>%
+  mutate(pop_muslim = round(muslim_ratio*total_pop),
+         pop_hindu = round(hindu_ratio*total_pop),
+         pop_otherrel = round(otherrel_ratio*total_pop),
+         pop_male = round(male_ratio*total_pop),
+         pop_female = round(female_ratio*total_pop))
+
+
+# Creating ratio of population for SC, ST and literate at subd to use later in the construction of panel data - variables from original Census data
+merged_pop_data <- merged_pop_data %>%
+  mutate(st_ratio = pop_ST/total_pop,
+         sc_ratio = pop_SC/total_pop,
+         others_ratio = pop_others/total_pop,
+         lit_ratio = pop_literate/total_pop)
+
+# Creating ratio of population for SC, ST and literate at subd to use later in the construction of panel data - variables from original census data
+merged_pop_data <- merged_pop_data %>%
+  group_by(state_name) %>% 
+  mutate(sd_st_ratio = pop_ST/sum(total_pop),
+         sd_sc_ratio = pop_SC/sum(total_pop),
+         sd_others_ratio = pop_others/sum(total_pop),
+         sd_lit_ratio = pop_literate/sum(total_pop))
+
+
+# Creating ratio of subdistrict population to total state population 
+
+merged_pop_data <- merged_pop_data %>%
+    group_by(state_name) %>%
+  mutate(subdist_ratio = total_pop/sum(total_pop))
+
+
+```
+
+
+
+
+#5. Merge Appended Census Data and Nightlight Data
+
+##Step 1: Clean Nightlight data
+
+```{r}
+
+# Remove columns for average radiance
+ntldata_01 <- subset(merged_dataset, select = -c(avg_rad_2012, avg_rad_2013, avg_rad_2014, avg_rad_2015, avg_rad_2016, avg_rad_2017, avg_rad_2018, avg_rad_2019, avg_rad_2020, avg_rad_2021 ))
+
+#Remove NAs from all columns 
+ntldata_02 <- ntldata_01[complete.cases(ntldata_01[, c("pc11_s_id","pc11_d_id", "pc11_sd_id", "sd_name", "avg_masked_rad_2012",  "avg_masked_rad_2013",  "avg_masked_rad_2014" ,   "avg_masked_rad_2015", "avg_masked_rad_2016",   "avg_masked_rad_2017",   "avg_masked_rad_2018"  ,    "avg_masked_rad_2019",        "avg_masked_rad_2020" , "avg_masked_rad_2021")]), ]
+
+##Renaming columns in merged_dataset
+ntldata_03 <- ntldata_02 %>% 
+  rename_with(~ str_replace_all(., c(
+    "pc11_s_id" = "pc11_state_id",
+    "pc11_d_id" = "pc11_district_id",
+    "pc11_sd_id" = "pc11_subdistrict_id",
+    "sd_name" = "pc11_subdistrict_name"
+  )))
+
+# Make columns lowercase to match the pop_data
+final_ntl_data <- ntldata_03 %>%
+  mutate_at(vars(pc11_subdistrict_name), tolower)
+
+# Rename columns
+final_ntl_data <- final_ntl_data %>% 
+  rename_with(~ str_replace_all(., c(
+    "pc11_" = "",
+    "pca_" = ""
+  )))
+
+
+## Export merged data as CSV file
+write.csv(final_ntl_data, file = "./Data/ntl_data.csv", row.names = FALSE)
+
+```
+
+
+##Step 2: Merge both datasets
+
+```{r}
+
+thesis_data <- merge(merged_pop_data, final_ntl_data, by = c("state_id", "district_id", "subdistrict_id"), suffixes = c("", ".y"), all.x = TRUE, sort = FALSE)
+
+# Delete the extra column created for subdistrict_name due to some difference in spellings for some of the values
+thesis_data <- thesis_data[, !grepl(".y", names(thesis_data))]
+
+# Export merged data as CSV file
+write.csv(thesis_data, file = "./Data/thesis_data.csv", row.names = FALSE)
+```
+
+
+#6. Create State-wise Panel Data
+
+##Step 1: Load data
+
+```{r}
+pdata <- read.csv("./Data/thesis_data.csv")
+
+```
+
+##Step 2: Create datasets for each year from 2012 to 2021
+
+```{r}
+
+# Loop through years 2012 to 2021 and create datasets with new column year
+for (i in 2012:2021) {
+  # Create a new dataset with the year column
+  pdata_i <- pdata %>% mutate(year = i)
+  
+  # Assign the new dataset to a variable with the corresponding year
+  assign(paste0("pdata_", i), pdata_i)
+}
+
+# Add the variable names to the global environment
+list2env(setNames(lapply(2012:2021, function(i) get(paste0("pdata_", i))), paste0("pdata_", 2012:2021)), envir = .GlobalEnv)
+
+```
+
+##Step 3: Add total population for each state based on projected values by the Govt of India
+
+```{r}
+
+#Add population data from census report for years 2012-2021
+#2012
+pdata_2012$total_statepop <- ifelse(pdata$state_name == "rajasthan", 69687000, 
+               ifelse(pdata$state_name == "uttar pradesh", 203067000,
+                      ifelse(pdata$state_name == "madhya pradesh", 73863000, 61934000)))
+
+#2013
+pdata_2013$total_statepop <- ifelse(pdata$state_name == "rajasthan", 70825000, 
+               ifelse(pdata$state_name == "uttar pradesh", 206322000,
+                      ifelse(pdata$state_name == "madhya pradesh", 75099000, 62877000)))
+
+#2014
+pdata_2014$total_statepop <- ifelse(pdata$state_name == "rajasthan", 71963000, 
+               ifelse(pdata$state_name == "uttar pradesh", 209577000,
+                      ifelse(pdata$state_name == "madhya pradesh", 76334000, 63821000)))
+
+#2015
+pdata_2015$total_statepop <- ifelse(pdata$state_name == "rajasthan", 73102000, 
+               ifelse(pdata$state_name == "uttar pradesh", 212832000,
+                      ifelse(pdata$state_name == "madhya pradesh", 77570000, 64765000)))
+
+#2016
+pdata_2016$total_statepop <- ifelse(pdata$state_name == "rajasthan", 74240000, 
+               ifelse(pdata$state_name == "uttar pradesh", 216087000,
+                      ifelse(pdata$state_name == "madhya pradesh", 78806000, 65698000)))
+
+#2017
+pdata_2017$total_statepop <- ifelse(pdata$state_name == "rajasthan", 75248000, 
+               ifelse(pdata$state_name == "uttar pradesh", 219051000,
+                      ifelse(pdata$state_name == "madhya pradesh", 79948000, 66624000)))
+
+#2018
+pdata_2018$total_statepop <- ifelse(pdata$state_name == "rajasthan", 76256000, 
+               ifelse(pdata$state_name == "uttar pradesh", 222015000,
+                      ifelse(pdata$state_name == "madhya pradesh", 81090000, 67550000)))
+
+#2019
+pdata_2019$total_statepop <- ifelse(pdata$state_name == "rajasthan", 77264000, 
+               ifelse(pdata$state_name == "uttar pradesh", 224979000,
+                      ifelse(pdata$state_name == "madhya pradesh", 82232000, 68476000)))
+
+#2020
+pdata_2020$total_statepop <- ifelse(pdata$state_name == "rajasthan", 78273000, 
+               ifelse(pdata$state_name == "uttar pradesh", 227943000,
+                      ifelse(pdata$state_name == "madhya pradesh", 83374000, 69402000)))
+
+#2021
+pdata_2021$total_statepop <- ifelse(pdata$state_name == "rajasthan", 79281000, 
+               ifelse(pdata$state_name == "uttar pradesh", 230907000,
+                      ifelse(pdata$state_name == "madhya pradesh", 84516000, 70289000)))
+
+
+```
+
+##Step 4: Add total male population for each state based on projected values by the Govt of India
+
+```{r}
+
+#Add population data from census report for years 2012-2021
+
+#2012
+pdata_2012$male_statepop <- ifelse(pdata_2012$state_name == "rajasthan", 36111000, 
+               ifelse(pdata_2012$state_name == "uttar pradesh", 106146000,
+                      ifelse(pdata_2012$state_name == "madhya pradesh", 38237000, 32308000)))
+
+#2013
+pdata_2013$male_statepop <- ifelse(pdata_2013$state_name == "rajasthan", 36670000, 
+               ifelse(pdata_2013$state_name == "uttar pradesh", 107812000,
+                      ifelse(pdata_2013$state_name == "madhya pradesh", 38862000, 32824000)))
+
+#2014
+pdata_2014$male_statepop <- ifelse(pdata_2014$state_name == "rajasthan", 37230000, 
+               ifelse(pdata_2014$state_name == "uttar pradesh", 109477000,
+                      ifelse(pdata_2014$state_name == "madhya pradesh", 39487000, 33340000)))
+
+#2015
+pdata_2015$male_statepop <- ifelse(pdata_2015$state_name == "rajasthan", 37790000, 
+               ifelse(pdata_2015$state_name == "uttar pradesh", 111143000,
+                      ifelse(pdata_2015$state_name == "madhya pradesh", 40112000, 33856000)))
+
+#2016
+pdata_2016$male_statepop <- ifelse(pdata_2016$state_name == "rajasthan", 38350000, 
+               ifelse(pdata_2016$state_name == "uttar pradesh", 112809000,
+                      ifelse(pdata_2016$state_name == "madhya pradesh", 40737000, 34366000)))
+
+#2017
+pdata_2017$male_statepop <- ifelse(pdata_2017$state_name == "rajasthan", 38834000, 
+               ifelse(pdata_2017$state_name == "uttar pradesh", 114316000,
+                      ifelse(pdata_2017$state_name == "madhya pradesh", 41312000, 34872000)))
+
+#2018
+pdata_2018$male_statepop <- ifelse(pdata_2018$state_name == "rajasthan", 39318000, 
+               ifelse(pdata_2018$state_name == "uttar pradesh", 115823000,
+                      ifelse(pdata_2018$state_name == "madhya pradesh", 41886000, 35378000)))
+
+#2019
+pdata_2019$male_statepop <- ifelse(pdata_2019$state_name == "rajasthan", 38803000, 
+               ifelse(pdata_2019$state_name == "uttar pradesh", 117330000,
+                      ifelse(pdata_2019$state_name == "madhya pradesh", 42460000, 35884000)))
+
+#2020
+pdata_2020$male_statepop <- ifelse(pdata_2020$state_name == "rajasthan", 40287000, 
+               ifelse(pdata_2020$state_name == "uttar pradesh", 118837000,
+                      ifelse(pdata_2020$state_name == "madhya pradesh", 43035000, 36390000)))
+
+#2021
+pdata_2021$male_statepop <- ifelse(pdata_2021$state_name == "rajasthan", 40772000, 
+               ifelse(pdata_2021$state_name == "uttar pradesh", 120344000,
+                      ifelse(pdata_2021$state_name == "madhya pradesh", 43609000, 36872000)))
+
+```
+
+##Step 5: Add total female population for each state based on projected values by the Govt of India
+
+```{r}
+
+#Add female population data from total pop - male pop
+
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name)
+  df$female_statepop <- df$total_statepop - df$male_statepop
+  assign(df_name, df, envir = .GlobalEnv)
+}
+```
+
+
+
+##Step 6: Assigning different populations by sub-district
+
+```{r}
+
+
+
+# Distribution of total population by subdistrict
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name) 
+  df$total_pop <- round(df$total_statepop * df$subdist_ratio)
+  assign(df_name, df, envir = .GlobalEnv)
+}
+ 
+# Distribution of ST population by subdistrict
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name) 
+  df$pop_ST <- round(df$total_statepop * df$sd_st_ratio)
+  assign(df_name, df, envir = .GlobalEnv)
+}
+
+# Distribution of SC population by subdistrict
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name) 
+  df$pop_SC <- round(df$total_statepop * df$sd_sc_ratio)
+  assign(df_name, df, envir = .GlobalEnv)
+}
+
+# Distribution of Others population by subdistrict
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name) 
+  df$pop_others <- round(df$total_statepop * df$sd_others_ratio)
+  assign(df_name, df, envir = .GlobalEnv)
+}
+
+# Check if any row exists where pop_SC + pop_ST > total_pop
+if (any(pdata$pop_SC + pdata$pop_ST > pdata$total_pop)) {
+  # Get the uid for the row(s) that meet the condition
+  wrong <- pdata$subdistrict_id[pdata$pop_SC + pdata$pop_ST > pdata$total_pop]
+  # Print the uid(s)
+  cat("Wrong:\n", wrong, "\n")
+} else {
+  cat(" ")
+}
+
+# Distribution of Muslim population by subdistrict
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name) 
+  df$pop_muslim <- round(df$total_statepop * df$sd_muslim_ratio)
+  assign(df_name, df, envir = .GlobalEnv)
+}
+
+# Distribution of Hindu population by subdistrict
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name) 
+  df$pop_hindu <- round(df$total_statepop * df$sd_hindu_ratio)
+  assign(df_name, df, envir = .GlobalEnv)
+}
+
+
+# Distribution of Other religion population by subdistrict
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name) 
+  df$pop_otherrel <- round(df$total_statepop * df$sd_otherrel_ratio)
+  assign(df_name, df, envir = .GlobalEnv)
+}
+
+
+# Distribution of Literate population by subdistrict
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name) 
+  df$pop_literate <- round(df$total_statepop * df$sd_lit_ratio)
+  assign(df_name, df, envir = .GlobalEnv)
+}
+
+
+# Distribution of Male population by subdistrict
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name) 
+  df$pop_male <- round(df$total_statepop * df$sd_male_ratio)
+  assign(df_name, df, envir = .GlobalEnv)
+}
+
+# Distribution of Female population by subdistrict
+for (i in 2012:2021) {
+  df_name <- paste0("pdata_", i)
+  df <- get(df_name) 
+  df$pop_female <- round(df$total_statepop * df$sd_female_ratio)
+  assign(df_name, df, envir = .GlobalEnv)
+}
+
+
+```
+
+##Step 8: Select appropriate nightlight data columns in all panel datasets
+
+```{r}
+
+# Select the appropriate masked radiation column based on the year
+pdata_list <- mget(ls(pattern = "^pdata_\\d{4}$"))
+
+pdata_list <- lapply(pdata_list, function(df){
+  df %>%
+    mutate(ntl_avg_masked_rad = ifelse(year == 2012, avg_masked_rad_2012,
+                                ifelse(year == 2013, avg_masked_rad_2013,
+                                ifelse(year == 2014, avg_masked_rad_2014,
+                                ifelse(year == 2015, avg_masked_rad_2015,
+                                ifelse(year == 2016, avg_masked_rad_2016,
+                                ifelse(year == 2017, avg_masked_rad_2017,
+                                ifelse(year == 2018, avg_masked_rad_2018,
+                                ifelse(year == 2019, avg_masked_rad_2019,
+                                ifelse(year == 2020, avg_masked_rad_2020,                                                     avg_masked_rad_2021)))))))))) %>%
+    dplyr::select(-starts_with("avg_masked_rad_"))
+})
+
+# Assign the modified data frames back to their original variables
+list2env(pdata_list, envir = .GlobalEnv)
+
+```
+
+##Step 9: Append all panel datasets
+
+```{r}
+# Remove redundant panel_i from environment
+rm(pdata_i)
+
+#Append all panel datasets
+final_panel <- bind_rows(pdata_list)
+
+# Add new row of numbered list of 1 to n for unique number for each observation
+final_panel <- tibble::rowid_to_column(final_panel, "NID")
+table(final_panel$year)
+
+```
+
+##Step 10: Create categorical variables for all individual panel datasets and the final_panel
+
+```{r}
+
+# Create a list of the dataset names
+datasets <- c("final_panel", paste0("pdata_", 2012:2021))
+
+#Loop through the dataframes and create the new categorical variables
+for (i in datasets) {
+  # Add daily power hours variable
+  assign(i, mutate(get(i), daily_power_hours = round((power_use_all_sum + power_use_all_win)/2)))
+  
+  # Add daily power hours categorical variable
+  assign(i, transform(get(i), daily_power_hours_cat = cut(daily_power_hours, breaks=c(0,8,16,24), labels=c("less than 8 hours", "8 to 16 hours", "more than 16 hours"))))
+  
+  # Add power access (all uses) categorical variable
+  assign(i, transform(get(i), power_access = ifelse(power_use_all == 1, "1-power access (all uses)", "0-no power access (all uses)")))
+  
+  # Convert categorical variables to factors and set reference levels
+  assign(i, transform(get(i), daily_power_hours_cat = factor(daily_power_hours_cat, levels=c("less than 8 hours", "8 to 16 hours", "more than 16 hours")),
+                       power_access = factor(power_access, levels=c("0-no power access (all uses)", "1-power access (all uses)"))))
+
+}
+
+```
+
+##Step 11: Select appropriate nightlight value range for all individual panel datasets and the final panel
+
+```{r}
+
+for (i in datasets) {
+  # Get the data frame associated with the current element of the 'datasets' vector
+  df <- get(i)
+  
+  #Selecting nightlight radiance values 
+  ##Check max-min values for nightlight (avg_rad and avg_masked_rad)
+  df %>% 
+    group_by(year) %>% 
+    summarize(min_avg_masked_rad=min(ntl_avg_masked_rad, na.rm=TRUE),
+              max_avg_masked_rad=max(ntl_avg_masked_rad, na.rm=TRUE))
+  
+  ### Subset the data for the average masked radiance variables
+  df <- df %>% 
+    mutate(ntl_avg_masked_rad = ifelse(ntl_avg_masked_rad > 0 & ntl_avg_masked_rad <= 100, ntl_avg_masked_rad, NA))
+  
+  # Assign the modified data frame back to the original object
+  assign(i, df)
+}
+
+summary(final_panel$ntl_avg_masked_rad)
+na_df <- final_panel[is.na(final_panel$ntl_avg_masked_rad),]
+
+```
+
+
+##Step 12: Save all Panel Data Years (2012-2021) & Final Panel Data
+
+```{r}
+
+save(pdata_2012, file ="./Data/Panel_Data_2012.RData")
+write.csv(pdata_2012, file ="./Data/Panel_Data_2012.csv", row.names=FALSE)
+
+save(pdata_2013, file ="./Data/Panel_Data_2013.RData")
+write.csv(pdata_2013, file ="./Data/Panel_Data_2013.csv", row.names=FALSE)
+
+save(pdata_2014, file ="./Data/Panel_Data_2014.RData")
+write.csv(pdata_2014, file ="./Data/Panel_Data_2014.csv", row.names=FALSE)
+
+save(pdata_2015, file ="./Data/Panel_Data_2015.RData")
+write.csv(pdata_2015, file ="./Data/Panel_Data_2015.csv", row.names=FALSE)
+
+save(pdata_2016, file ="./Data/Panel_Data_2016.RData")
+write.csv(pdata_2016, file ="./Data/Panel_Data_2016.csv", row.names=FALSE)
+
+save(pdata_2017, file ="./Data/Panel_Data_2017.RData")
+write.csv(pdata_2017, file ="./Data/Panel_Data_2017.csv", row.names=FALSE)
+
+save(pdata_2018, file ="./Data/Panel_Data_2018.RData")
+write.csv(pdata_2018, file ="./Data/Panel_Data_2018.csv", row.names=FALSE)
+
+save(pdata_2019, file ="./Data/Panel_Data_2019.RData")
+write.csv(pdata_2019, file ="./Data/Panel_Data_2019.csv", row.names=FALSE)
+
+save(pdata_2020, file ="./Data/Panel_Data_2020.RData")
+write.csv(pdata_2020, file ="./Data/Panel_Data_2020.csv", row.names=FALSE)
+
+save(pdata_2021, file ="./Data/Panel_Data_2021.RData")
+write.csv(pdata_2021, file ="./Data/Panel_Data_2021.csv", row.names=FALSE)
+
+save(final_panel, file ="./Data/Thesis_Panel.RData")
+write.csv(final_panel, file ="./Data/Thesis_Panel.csv", row.names=FALSE)
+
+```
+

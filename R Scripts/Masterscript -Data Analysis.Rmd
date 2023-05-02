@@ -1,0 +1,1379 @@
+---
+title: "Masterscript-Data Analysis"
+author: "Hiba Ahmad, Shefali Roy"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+#1. Load packages
+
+```{r setup, include=FALSE}
+library(readr)
+library(haven)
+library(lmtest)
+library(table1)
+library(descr)
+library(plyr)
+library(stargazer)
+library(compareGroups)
+library(ggrepel)
+library(gplots)
+library(ggplot2)
+library(questionr)
+library(tidyverse)
+library(tibble)
+library(tidyr)
+library(gtsummary)
+library(dplyr)
+library(margins)
+library(sjmisc)
+library(sjlabelled)
+library(sjPlot)
+library(plm)
+library(pacman)
+library(forcats)
+library(srvyr)
+library(naniar)
+library(fixest)
+library(margins)
+library(etable)
+library(here)
+library(readstata13)
+library(survey)
+library(patchwork)
+library(corrplot)
+library(gridExtra)
+library(ggfortify)
+library(viridis)
+library(ggthemes)
+library(ggalt)
+library(sandwich)
+library(ggpubr)
+library(gplots)
+library(gridExtra)
+
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#1. Load data 
+
+```{r, echo=FALSE, warning=FALSE}
+
+# Load data with Census 2011 population data
+data_01 <- read_csv("./Data/thesis_data.csv", show_col_types = FALSE)
+
+```
+
+#2. Select cases and Transform Variables
+
+```{r}
+# Categorical variable #1 : Subdistrict
+#summary(data_01$total_pop)
+q1 <- quantile(data_01$total_pop, 0.05)
+q2 <- quantile(data_01$total_pop, 0.95)
+
+#categorisation based on distribution
+data_01$subdistrict_cat <- "NA"
+data_01$subdistrict_cat[data_01$total_pop>0 & data_01$total_pop<=250000] <- "1-small subdistricts"
+data_01$subdistrict_cat[data_01$total_pop>250000 & data_01$total_pop<=500000] <- "2-medium subdistricts"
+data_01$subdistrict_cat[data_01$total_pop>500000] <- "3-large subdistricts"
+data_01$subdistrict_cat <- as.factor(data_01$subdistrict_cat)
+#table(data_01$subdistrict_cat)
+
+# Categorical variable #2: Daily Power Hours (annually)
+## Add a new column for daily power hours annually (mean of summer and winter)
+data_02 <- mutate(data_01, daily_power_hours = round((power_use_all_sum + power_use_all_win)/2))
+
+data_02$daily_power_hours_cat <- "NA"
+data_02$daily_power_hours_cat[data_02$daily_power_hours<8] <- "less than 8 hours"
+data_02$daily_power_hours_cat[data_02$daily_power_hours>=8 & data_02$daily_power_hours<=16] <- "8 to 16 hours"
+data_02$daily_power_hours_cat[data_02$daily_power_hours>16] <- "more than 16 hours"
+data_02$daily_power_hours_cat <- as.factor(data_02$daily_power_hours_cat)
+data_02$daily_power_hours_cat <- relevel(data_02$daily_power_hours_cat, ref = "less than 8 hours")
+
+# Categorical variable #3:  Power Access (for all uses) - binary
+data_02$power_access <- "NA"
+data_02$power_access[data_02$power_use_all==1] <- "1-power access (all uses)"
+data_02$power_access[data_02$power_use_all==0] <- "0-no power access (all uses)"
+data_02$power_access <- as.factor(data_02$power_access)
+
+#Recoding state names
+data_02$state_name[data_02$state_name=="gujarat"] <- "Gujarat"
+data_02$state_name[data_02$state_name=="rajasthan"] <- "Rajasthan"
+data_02$state_name[data_02$state_name=="uttar pradesh"] <- "Uttar Pradesh"
+data_02$state_name[data_02$state_name=="madhya pradesh"] <- "Madhya Pradesh"
+ 
+data_03 <- data_02
+
+```
+
+#3. Descriptive Stats
+Population data:
+Variables: 
+1. ST
+2. SC
+3. Literate
+4. Urban
+5. Rural
+
+Across:
+1. State
+2. District
+3. Sub-district
+
+
+## Step 1: Correlation Plot: All Independent Variables
+```{r}
+#Correlation plot of control variables
+pop_var <- data_03 %>% 
+  dplyr::select(pop_hindu, pop_muslim, pop_otherrel, pop_SC, pop_ST, pop_others, pop_literate, pop_male, pop_female, village_area_hectares, power_use_all, daily_power_hours) %>% 
+  cor()
+
+# Set the variable names using colnames()
+colnames(pop_var) <- c("Hindu", "Muslim", "Other Religions", "Scheduled Caste", "Scheduled Tribe", "Other Castes", "Literate", "Male", "Female", "Subdistrict Area", "Power Acces", "Power Reliability")
+# Set the variable names using colnames()
+rownames(pop_var) <- c("Hindu", "Muslim", "Other Religions", "Scheduled Caste", "Scheduled Tribe", "Other Castes", "Literate", "Male", "Female", "Subdistrict Area", "Power Acces", "Power Reliability")
+
+png(height=600, width=600, pointsize = 15, 
+    file= here("Output","corrplot.png"), type = "cairo")
+ corrplot(pop_var, type = "lower", order = "alphabet",
+         addCoef.col = "black", tl.col = "black",
+         cl.ratio = 0.2, tl.srt = 90,
+         number.cex=0.70, #font size reduced for numbers in plot
+         method = "color", diag = F,
+         col = colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))(200),
+         addrect = 2,
+         #title = bquote(underline("Correlation Plot: Independent Variables")),
+         #mar = c(1,1,2,1)
+         )
+dev.off()
+
+
+```
+
+## Step 2: Summary Statistics Table for IVs and DV (across the years)
+
+```{r summarypop}
+##to be included in Data section
+#Summary Statistics - All Independent Variables
+
+table1::label(data_03$state_name) <- "States"
+table1::label(data_03$district_name) <- "Districts"
+table1::label(data_03$subdistrict_name) <- "Subdistricts"
+table1::label(data_03$subdistrict_cat) <-"Size of Subdistricts"
+table1::label(data_03$total_pop) <- "Total Population"
+table1::label(data_03$pop_literate) <- "Total Literate Population"
+table1::label(data_03$pop_male) <- "Total Male Population"
+table1::label(data_03$pop_female) <- "Total Female Population"
+table1::label(data_03$pop_muslim) <- "Total Muslim Population"
+table1::label(data_03$pop_hindu) <- "Total Hindu Population"
+table1::label(data_03$pop_otherrel) <- "Total Other Religious Population"
+table1::label(data_03$pop_SC) <- "SC Population"
+table1::label(data_03$pop_ST) <- "ST Population"
+table1::label(data_03$pop_others) <- "General + OBC Population"
+table1::label(data_03$daily_power_hours_cat) <- "Daily Power Hours"
+table1::label(data_03$power_access) <- "Power Access"
+table1::label(data_03$village_area_hectares) <- "Subdistrict Area (Hectares)"
+
+sum_table_IVs <- table1::table1(~subdistrict_cat + total_pop+ pop_literate + pop_male + pop_female + pop_hindu + pop_muslim + pop_otherrel + pop_SC + pop_ST + pop_others + daily_power_hours_cat +  power_access + village_area_hectares | state_name, data = data_03)
+sum_table_IVs
+
+
+#Summary Statistics - Dependent Variables (All Years) - Average Masked Radiance
+
+table1::label(data_03$state_name) <- "States"
+table1::label(data_03$avg_masked_rad_2012) <- "Average Masked Radiance 2012"
+table1::label(data_03$avg_masked_rad_2013) <- "Average Masked Radiance 2013"
+table1::label(data_03$avg_masked_rad_2014) <- "Average Masked Radiance 2014"
+table1::label(data_03$avg_masked_rad_2015) <- "Average Masked Radiance 2015"
+table1::label(data_03$avg_masked_rad_2016) <- "Average Masked Radiance 2016"
+table1::label(data_03$avg_masked_rad_2017) <- "Average Masked Radiance 2017"
+table1::label(data_03$avg_masked_rad_2018) <- "Average Masked Radiance 2018"
+table1::label(data_03$avg_masked_rad_2019) <- "Average Masked Radiance 2019"
+table1::label(data_03$avg_masked_rad_2020) <- "Average Masked Radiance 2020"
+table1::label(data_03$avg_masked_rad_2021) <- "Average Masked Radiance 2021"
+
+table1::table1(~avg_masked_rad_2012+avg_masked_rad_2013+avg_masked_rad_2014+avg_masked_rad_2015+avg_masked_rad_2016+avg_masked_rad_2017+avg_masked_rad_2018+avg_masked_rad_2019+avg_masked_rad_2020+avg_masked_rad_2021 | state_name, data = data_03)
+```
+
+
+
+##Step 3: Create Scatterplots
+
+```{r scatterrel, fig.width=7, fig.height=3, echo=FALSE}
+
+General_OBC <- ggplot(data_03, aes(x = pop_others, y = avg_masked_rad_2012)) +
+  geom_point() +
+  geom_jitter() +
+  geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_classic() +
+  xlab("Non-SC & Non-ST Population") +
+  ylab("Annual electricity consumption")+
+      theme(axis.title = element_text(size = 12),
+                              axis.text = element_text(size = 12)) +
+    scale_x_continuous(labels = function(x) paste0(x/1000,""))
+
+SC <- ggplot(data_03, aes(x = pop_SC, y = avg_masked_rad_2012)) +
+  geom_point() +
+  geom_jitter() +
+  geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_classic() +
+  xlab("SC Population") +
+  ylab("Annual electricity consumption")+
+      theme(axis.title = element_text(size = 12),
+                              axis.text = element_text(size = 12)) +
+    scale_x_continuous(labels = function(x) paste0(x/1000,""))
+
+ST <- ggplot(data_03, aes(x = pop_ST, y = avg_masked_rad_2012)) +
+  geom_point() +
+  geom_jitter() +
+  geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_classic() +
+  xlab("ST Population") +
+  ylab("Annual electricity consumption")+
+      theme(axis.title = element_text(size = 12),
+                              axis.text = element_text(size = 12)) +
+    scale_x_continuous(labels = function(x) paste0(x/1000,""))
+
+caste_scatterplot <- ggarrange(General_OBC, SC, ST, nrow = 1, ncol = 3)
+caste_scatterplot
+# Save the grob object as a PDF file
+ggsave(file.path("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output",  "scattercaste.pdf"), plot = caste_scatterplot, device = "pdf")
+
+
+#For Religion
+Hindu <- ggplot(data_03, aes(x = pop_hindu, y = avg_masked_rad_2012)) +
+                      geom_point() +
+                      geom_jitter() +
+  geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_classic() +
+                      xlab("Hindu Population (in thousands)") +
+                      ylab("Annual electricity consumption") +
+      theme(axis.title = element_text(size = 12),
+                              axis.text = element_text(size = 10)) +
+    scale_x_continuous(labels = function(x) paste0(x/1000,""))
+
+Muslim <- ggplot(data_03, aes(x = pop_muslim, y = avg_masked_rad_2012)) +
+                       geom_point() +
+                       geom_jitter() +
+  geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed", border=F) +
+    theme_classic() +
+                       xlab("Muslim Population (in thousands)") +
+                       ylab("Annual electricity consumption") +
+      theme(axis.title = element_text(size = 12),
+                              axis.text = element_text(size = 10),
+            panel.border = element_blank()) +
+    scale_x_continuous(labels = function(x) paste0(x/1000,""))
+
+Other_religions <- ggplot(data_03, aes(x = pop_otherrel, y = avg_masked_rad_2012)) +
+                                 geom_point() +
+                                geom_jitter() +
+  geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_classic() +
+                                 xlab("Other Religion Population (in thousands)") +
+                                 ylab("Annual electricity consumption") +
+      theme(axis.title = element_text(size = 10),
+                              axis.text = element_text(size = 10),
+            panel.border = element_blank()) +
+    scale_x_continuous(labels = function(x) paste0(x/1000,""))
+
+
+rel <- ggarrange(Hindu, Muslim, Other_religions, nrow = 1, ncol = 3)
+rel
+ggsave(file.path("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output",  "scatterrel.png"), plot = rel, device = "png")
+```
+
+##Step 4: Plotting: SC, ST population per state
+```{r ST/SC_state, fig.width=7,fig.height=6, fig.cap = "SC and ST population- All states", echo = FALSE, results='hide', warning=FALSE }
+
+data_03 %>% 
+  group_by(state_name, state_id) %>% 
+  summarise(
+    pop_ST= mean(pop_ST, na.rm=TRUE),
+    pop_SC= mean(pop_SC, na.rm=TRUE)) %>% 
+  
+    pivot_longer(c("pop_ST", "pop_SC"), names_to = "pop", values_to = "val") %>% 
+  ggplot(aes(y=val, x=pop, color = pop)) +
+  geom_point() +
+  facet_wrap(~state_name, scales = "free", ncol=5) +
+  scale_fill_brewer(palette="Set2")
+
+# Plot proportions of SC, ST for each state separately
+data_03 %>% 
+  group_by(state_name, state_id) %>% 
+  summarise(
+    pop_ST_prop= mean(st_ratio, na.rm=TRUE),
+    pop_SC_prop= mean(sc_ratio, na.rm=TRUE)) %>% 
+  
+    pivot_longer(c("pop_ST_prop", "pop_SC_prop"), names_to = "pop", values_to = "val") %>% 
+  ggplot(aes(y=val, x=pop, color = pop)) +
+  geom_point() +
+  facet_wrap(~state_name, scales = "free", ncol=5) +
+  scale_fill_brewer(palette="Set2")
+
+
+# Plot means of SC for all states
+data_03 %>% 
+  group_by(state_name, state_id) %>% 
+  summarise(pop_ST= mean(pop_ST, na.rm=TRUE)) %>% 
+  
+  ggplot(aes(y=pop_ST, x=state_id, color = state_name)) +
+  geom_point() +
+  geom_text_repel(aes(label = state_name)) +
+  scale_fill_brewer(palette="Set2") +
+  labs(x = "State ID", y="Mean of ST population", col="State name")
+
+# Plot proportions of ST population for all states
+data_03 %>% 
+  group_by(state_name, state_id) %>% 
+  summarise(pop_ST_prop= mean(st_ratio, na.rm=TRUE)) %>% 
+  
+  ggplot(aes(y=pop_ST_prop, x=state_id, color = state_name)) +
+  geom_point() +
+  geom_text_repel(aes(label = state_name)) +
+  scale_fill_brewer(palette="Set2") +
+  labs(x = "State ID", y="Proportion of ST population", col="State name") 
+
+# Plot means of SC for all states
+data_03 %>% 
+  group_by(state_name, state_id) %>% 
+  summarise(pop_SC= mean(pop_SC, na.rm=TRUE)) %>% 
+  
+  ggplot(aes(y=pop_SC, x=state_id, color = state_name)) +
+  geom_point() +
+  geom_text_repel(aes(label = state_name)) +
+  scale_fill_brewer(palette="Set2") +
+  labs(x = "State ID", y="Mean of SC population", col="State name")
+
+# Plot proportions of SC population for all states
+data_03 %>% 
+  group_by(state_name, state_id) %>% 
+  summarise(pop_SC_prop= mean(sc_ratio, na.rm=TRUE)) %>% 
+  
+  ggplot(aes(y=pop_SC_prop, x=state_id, color = state_name)) +
+  geom_point() +
+  geom_text_repel(aes(label = state_name)) +
+  scale_fill_brewer(palette="Set2") +
+  labs(x = "State ID", y="Proportion of SC population", col="State name") 
+  
+
+
+```
+
+##Step 5: Plotting: Literate population per state
+```{r descr_literate_state, fig.width=7,fig.height=6, fig.cap = "SC and ST population- All states", echo = FALSE, results='hide', warning=FALSE }
+
+# Plot means of literate population for all states
+data_03 %>% 
+  group_by(state_name, state_id) %>% 
+  summarise(pop_literate= mean(pop_literate, na.rm=TRUE)) %>% 
+  
+  ggplot(aes(y=pop_literate, x=state_id, color = state_name)) +
+  geom_point() +
+  geom_text_repel(aes(label = state_name)) +
+  scale_fill_brewer(palette="Set2") +
+  labs(x = "State ID", y="Mean of literate population", col="State name")
+
+# Plot proportions of literate population for all state
+data_03 %>% 
+  group_by(state_name, state_id) %>% 
+  summarise(pop_lit_prop= mean(lit_ratio, na.rm=TRUE)) %>% #have to run data_prep doc once more to include lit ratio here
+  
+  ggplot(aes(y=pop_lit_prop, x=state_id, color = state_name)) +
+  geom_point() +
+  geom_text_repel(aes(label = state_name)) +
+  scale_fill_brewer(palette="Set2") +
+  labs(x = "State ID", y="Proportion of literate population", col="State name") 
+
+
+```
+
+#4. External Validity - Correlational Analysis
+```{r}
+ev_data <- read_csv("./Data/CEEW - IRES Data.csv")
+ev_data <- subset(ev_data, ev_data$s_code==8 | ev_data$s_code==9 | ev_data$s_code==24 | ev_data$s_code==23)
+ev_data_01 <- ev_data %>%
+  dplyr::select(s_name, s_code, d_name, d_code, q315_a_bill_mar_jun, q315_b_bill_jul_oct, q315_c_bill_nov_feb)
+
+ev_data_02 <- subset(ev_data_01, ev_data_01$q315_a_bill_mar_jun>0 & ev_data_01$q315_b_bill_jul_oct>0 & ev_data_01$q315_c_bill_nov_feb>0)
+
+ev_data_03 <- ev_data_02 %>%
+  group_by(s_name, s_code, d_name, d_code) %>%
+  dplyr::summarise(q315_a_bill_mar_jun = round(mean(q315_a_bill_mar_jun)),
+            q315_b_bill_jul_oct = round(mean(q315_b_bill_jul_oct)),
+            q315_c_bill_nov_feb = round(mean(q315_c_bill_nov_feb))) 
+
+ev_data_04 <- ev_data_03 %>%
+  mutate(total_spend = sum(q315_a_bill_mar_jun, q315_b_bill_jul_oct, q315_c_bill_nov_feb)) %>%
+  rename(district_id = d_code)
+
+thesis_data <- read_csv("./Data/thesis_data.csv")
+thesis_data <- thesis_data %>%
+  dplyr::select(state_id, district_id, state_name, district_name, avg_masked_rad_2019) %>%
+  group_by(state_id, district_id, state_name, district_name) %>%
+  dplyr::summarise(avg_masked_rad_2019 = round(mean(avg_masked_rad_2019),8)) %>%
+  mutate(log_rad_2019 = log1p(avg_masked_rad_2019))
+
+final_data <- left_join(ev_data_04, thesis_data, by = "district_id") 
+final_data <- subset(final_data , final_data$avg_masked_rad_2019!="NA") 
+
+# Calculate correlation between variables - Pearson's r
+correlation <- cor.test(final_data$total_spend, final_data$log_rad_2019)
+
+# Create scatterplot with smoother line
+ggplot(final_data, aes(x = total_spend, y = log_rad_2019)) +
+    geom_jitter() +
+    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
+    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_base() +
+  labs(x = "Annual Electricity Spending", y = "Log of Nightlight Radiance Values",
+       title = paste("Correlation =", round(correlation, 2)))
+
+# Calculate correlation between variables - Spearman's Rank correlation
+correlation_spearman <- cor.test(final_data$total_spend, final_data$log_rad_2019, method = "spearman")
+
+# State wise spearman coefficients
+final_data_UP <- subset(final_data , final_data$s_code==9) 
+correlation_UP <- cor(final_data_UP$total_spend, final_data_UP$log_rad_2019)
+correlation_UP_spearman <- cor(final_data_UP$total_spend, final_data_UP$log_rad_2019, method = "spearman")
+ggplot(final_data_UP, aes(x = total_spend, y = log_rad_2019)) +
+    geom_jitter() +
+    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
+    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_base()
+
+final_data_MP <- subset(final_data , final_data$s_code==23) 
+correlation_MP <- cor(final_data_MP$total_spend, final_data_MP$log_rad_2019)
+correlation_MP_spearman <- cor(final_data_MP$total_spend, final_data_MP$log_rad_2019, method = "spearman")
+ggplot(final_data_MP, aes(x = total_spend, y = log_rad_2019)) +
+    geom_jitter() +
+    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
+    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_base()
+
+final_data_Guj <- subset(final_data , final_data$s_code==24) 
+correlation_Guj <- cor(final_data_Guj$total_spend, final_data_Guj$log_rad_2019)
+correlation_Guj_spearman <- cor(final_data_Guj$total_spend, final_data_Guj$log_rad_2019, method = "spearman")
+ggplot(final_data_Guj, aes(x = total_spend, y = log_rad_2019)) +
+    geom_jitter() +
+    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
+    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_base()
+
+final_data_Raj <- subset(final_data , final_data$s_code==8) 
+correlation_Raj <- cor(final_data_Raj$total_spend, final_data_Raj$log_rad_2019)
+correlation_Raj_spearman <- cor(final_data_Raj$total_spend, final_data_Raj$log_rad_2019, method = "spearman")
+ggplot(final_data_Raj, aes(x = total_spend, y = log_rad_2019)) +
+    geom_jitter() +
+    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
+    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_base()
+
+```
+
+#5. Regression Analysis - OLS
+
+##Step 1: Select Cases & Transform Variables
+
+```{r ols, echo=FALSE}
+#Checking density distributions for controls
+
+# create a list of variables to plot
+var_list <- c("pop_others", "pop_literate", "pop_male", "pop_female", "pop_hindu", "pop_muslim", "pop_otherrel")
+
+# loop through the list and plot density plots
+for(var in var_list) {
+  plot_data <- ggplot(data_03, aes(x = .data[[var]])) + 
+    geom_density() + 
+    ggtitle(paste("Density plot of", var))
+  
+  print(plot_data)
+}
+
+#Log transformation
+#average masked radiance
+for (i in 2012:2021) {
+  col_name <- paste0("log_avg_masked_rad_", i)
+  data_03[[col_name]] <- log(data_03[[paste0("avg_masked_rad_", i)]])
+}
+
+# Add log transformed columns for all population data
+data_03 <- data_03 %>% 
+  mutate(log_SC = log(pop_SC), log_ST = log1p(pop_ST), log_muslim = log(pop_muslim), log_literate= log(pop_literate), log_hindu= log(pop_hindu), log_others = log(pop_others), log_otherrel = log(pop_otherrel), log_total_pop = log(total_pop), log_male = log(pop_male), log_female = log(pop_female), log_village_area = log(village_area_hectares)) 
+
+
+```
+
+## Step 2: Check the distribution of original vs log transformed variables (done only for avg_masked_radiance, pop SC, pop ST, and pop Muslim)
+```{r}
+dist_var <- data_03 %>% 
+  rename(`Average Masked Radiance 2012` = avg_masked_rad_2012,
+         `Muslim Population` = pop_muslim,
+         `SC Population` = pop_SC,
+         `ST Population` = pop_ST,
+         `Log (Average Masked Radiance 2012)` = log_avg_masked_rad_2012,
+         `Log (Muslim Population)` = log_muslim,
+         `Log (SC Population)` = log_SC,
+         `Log (ST Population)` = log_ST) 
+
+density<- dist_var %>%
+  gather(variable, value, `Average Masked Radiance 2012`, `Muslim Population`, `SC Population`, `ST Population`, `Log (Average Masked Radiance 2012)`, `Log (Muslim Population)`, `Log (SC Population)`, `Log (ST Population)`) %>%
+  mutate(variable = factor(variable, levels = c("Average Masked Radiance 2012", 
+                                                "Muslim Population", 
+                                                "SC Population",
+                                                "ST Population",
+                                                "Log (Average Masked Radiance 2012)",
+                                                "Log (Muslim Population)",
+                                                "Log (SC Population)",
+                                                "Log (ST Population)"),
+                           
+                             labels = c("Avg Masked Rad 2012", 
+                                        "Muslim", 
+                                        "SC",
+                                        "ST",
+                                        "Log (Avg M Rad '12)",
+                                        "Log (Muslim)",
+                                        "Log (SC)",
+                                        "Log (ST)"))) %>%
+   ggplot(aes(x = value, fill = variable)) +
+  geom_bkde() +
+  geom_rug() +
+  scale_fill_viridis(guide = "none", discrete = TRUE) +
+  facet_wrap(~variable, scales = "free", ncol = 4, nrow = 2) +
+  labs(x = "Value",
+       y = "Density") +
+  theme(axis.text.x = element_text(size = 8)) +
+  ggtitle("Density Plots", "Pre- and Post-Log Transformation")
+
+density
+ggsave(file.path("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output",  "density.png"), plot = density, device = "png")
+
+
+```
+
+
+##Step 3: Check for OLS Assumptions
+```{r}
+## 1. Testing linearity for each of our key independent variables with the dependent variable
+
+##1. Testing for linearity of x and y
+#For pop_SC
+l1<- ggplot(data_03, aes(x = log_avg_masked_rad_2012, y = log_SC)) +
+    geom_jitter() +
+    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
+    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+  ggtitle("Relationship of independent variables with NTL") +
+    theme_classic()
+
+#For pop_ST
+l2<- ggplot(data_03, aes(x = log_avg_masked_rad_2012, y = log_ST)) +
+    geom_jitter() +
+    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
+    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_classic()
+ 
+ #For pop_muslim
+l3<- ggplot(data_03, aes(x = log_avg_masked_rad_2012, y = log_muslim)) +
+    geom_jitter() +
+    geom_smooth(method = "lm", color = viridis(1, begin = 1),   se = FALSE) +
+    geom_smooth(span   = 1,    color = viridis(1, begin = 0.6), se = FALSE, linetype =
+                "dashed") +
+    theme_classic()
+
+NTLlinear <- ggarrange(l1 + rremove("xlab"), l2 + rremove("xlab"), l3,
+                       ncol=1, nrow=3,
+                       common.legend = TRUE, legend = "bottom",
+                       align = "hv", 
+                    font.label = list(size = 10, color = "black"))
+
+ggsave(file.path("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output",  "NTLlinear.png"), plot = NTLlinear, device = "png")
+
+##2. Tests for Models
+
+#Model 1: By Caste -------------------##SC+ ST+ General & OBC
+model1 <- lm(log_avg_masked_rad_2012 ~ log_SC + log_ST + log_others, (data = data_03))
+
+png("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output/OLSmodel1.png")
+par(mfrow=c(2,2))
+plot(model1)
+dev.off()
+
+#Model 2: By Religion-----------------##Muslim + Other+ Hindu
+model2 <- lm(log_avg_masked_rad_2012 ~ log_muslim+log_otherrel+log_hindu, (data = data_03))
+png("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output/OLSmodel2.png")
+par(mfrow=c(2,2))
+plot(model2)
+dev.off()
+
+bptest(log_avg_masked_rad_2012 ~ log_muslim+log_otherrel+log_hindu, data = data_03, studentize = TRUE)
+
+#Model 3: By Minorities---------------##SC+ ST + Muslim + Other Religions
+model3 <- lm(log_avg_masked_rad_2012 ~ log_SC + log_ST + log_muslim+ log_otherrel, (data = data_03))
+png("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output/OLSmodel3.png")
+par(mfrow=c(2,2))
+plot(model3)
+dev.off()
+
+###Homogeneity: plot shows if residuals are spread equally along the ranges of predictors. It’s good if you see a horizontal line with equally spread points
+bptest(log_avg_masked_rad_2012 ~ log_SC + log_ST + log_muslim+ log_otherrel, data = data_03, studentize = TRUE)
+
+```
+
+
+
+##Step 3: Run Models
+##Note: For most models for the analysis, data from 2012 have been used. The regression models for other years will be added to the appendix.
+
+## TABLE 1 FOR OLS
+```{r}
+#Model 1: By Caste ----------------------------------------------
+
+##SC+ ST+ General & OBC
+model_2012_1 <- lm(log_avg_masked_rad_2012 ~ log_SC + log_ST + log_others, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_1 <- vcovHC(model_2012_1, type = "HC")
+
+#Model 2: By Religion----------------------------------------------
+
+##Muslim + Other+ Hindu
+model_2012_2 <- lm(log_avg_masked_rad_2012 ~ log_muslim+log_otherrel+log_hindu, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_2 <- vcovHC(model_2012_2, type = "HC")
+#vcov_cluster_2 <- vcovCL(model_2012_2, cluster = data_03$district_id)
+
+#Model 3: By Minorities----------------------------------------------
+
+##SC+ ST + Muslim + Other Religions
+model_2012_3 <- lm(log_avg_masked_rad_2012 ~ log_SC + log_ST + log_muslim+ log_otherrel, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_3 <- vcovHC(model_2012_3, type = "HC")
+
+
+stargazer(model_2012_1, model_2012_2,model_2012_3, title = "Table 1: Regression Results", type="text", se = list(vcov_cluster_1, vcov_cluster_2, vcov_cluster_3), "vcov")
+stargazer(model_2012_1, model_2012_2,model_2012_3, 
+          title = "", 
+          type = "latex",
+          se = list(vcov_cluster_1, vcov_cluster_2, vcov_cluster_3), 
+          column.labels = c("Model 1", "Model 2", "Model 3"), 
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+          align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n"
+)
+                  
+
+```
+
+## TABLE 2 FOR OLS
+```{r}
+#Religion
+model_2012_4 <- lm(log_avg_masked_rad_2012 ~ log_muslim + log_otherrel + log_hindu + state_name, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_4 <- vcovHC(model_2012_4, type = "HC")
+
+model_2012_5 <- lm(log_avg_masked_rad_2012 ~ log_muslim + log_otherrel + log_hindu + log_village_area + power_use_all + daily_power_hours, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_5 <- vcovHC(model_2012_5, type = "HC")
+
+stargazer(model_2012_4, model_2012_5, title = "", type="text", se = list(vcov_cluster_4, vcov_cluster_5), "vcov")
+
+stargazer(model_2012_4, model_2012_5, 
+          title = "", 
+          type = "latex",
+          se = list(vcov_cluster_4, vcov_cluster_5), 
+          column.labels = c("Model 1", "Model 2"), 
+          dep.var.caption = "Dependent variable: log_avg_masked_rad_2012",
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+          align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n"
+)
+                  
+#Caste
+
+#only SC
+model_2012_6 <- lm(log_avg_masked_rad_2012 ~ log_SC + state_name, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_6 <- vcovHC(model_2012_6, type = "HC")
+
+model_2012_7 <- lm(log_avg_masked_rad_2012 ~ log_SC +  log_village_area + power_use_all + daily_power_hours, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_7 <- vcovHC(model_2012_7, type = "HC")
+
+#only ST              
+model_2012_8 <- lm(log_avg_masked_rad_2012 ~ log_ST + log_literate + state_name, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_8 <- vcovHC(model_2012_8, type = "HC")
+
+model_2012_9 <- lm(log_avg_masked_rad_2012 ~ log_ST + log_village_area + power_use_all + daily_power_hours, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_9 <- vcovHC(model_2012_9, type = "HC")
+
+#SC is highly correlated with pop literate and pop female
+
+#both together
+model_2012_10 <- lm(log_avg_masked_rad_2012 ~ log_SC + log_ST + log_village_area + power_use_all + daily_power_hours + state_name, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_10 <- vcovHC(model_2012_10, type = "HC")
+
+list <- list(model_2012_6, model_2012_7, model_2012_8, model_2012_9, model_2012_10)
+
+#R output
+stargazer(list, title = "", type="text", se = list(vcov_cluster_6, vcov_cluster_7, vcov_cluster_8, vcov_cluster_9, vcov_cluster_10 ), "vcov")
+
+#Latex output
+stargazer(list, 
+          title = "", 
+          type = "latex",
+          se = list(vcov_cluster_6, vcov_cluster_7, vcov_cluster_8, vcov_cluster_9, vcov_cluster_10),
+          dep.var.caption = "Dependent variable: log_avg_masked_rad_2012",
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+          align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n",
+          booktabs = TRUE)
+
+```
+
+## TABLE 3 & 4 FOR OLS
+```{r}
+#Interaction Model by Religion
+model_2012_9 <- lm(log_avg_masked_rad_2012 ~ log_muslim + log_otherrel + log_village_area + daily_power_hours + state_name + log_muslim:state_name + log_otherrel:state_name, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_9 <- vcovHC(model_2012_9, type = "HC")
+
+#R Output
+stargazer(model_2012_9, title = "", type="text", se = list(vcov_cluster_9), "vcov")
+#Latex Output
+stargazer(model_2012_9, 
+          title = "", 
+          type = "latex",
+          se = list(vcov_cluster_9), 
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+          align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n"
+)
+
+#Interaction Model by Caste
+model_2012_10 <- lm(log_avg_masked_rad_2012 ~ log_SC + log_ST + log_village_area + daily_power_hours + state_name + log_SC:state_name + log_ST:state_name, (data = data_03))
+# adding clustered standard errors
+vcov_cluster_10 <- vcovHC(model_2012_10, type = "HC")
+
+#R Output
+stargazer(model_2012_10, title = "", type="text")
+#Latex Output
+stargazer(model_2012_10, 
+          title = "", 
+          type = "latex",
+          se = list(vcov_cluster_10), 
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+          align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n"
+)
+      
+```
+
+
+##APPENDIX TABLE FOR OLS - By Religion
+
+```{r}
+
+### TABLE 5 FOR OLS - Electricity Consumption by Religion: with Covariates
+
+#2013
+modelr_2013 <- lm(log_avg_masked_rad_2013 ~ log_muslim + log_otherrel + log_village_area + daily_power_hours + state_name + log_muslim:state_name + log_otherrel:state_name, (data = data_03))
+# adding clustered standard errors
+vcovr_2013 <- vcovHC(modelr_2013, type = "HC")
+
+#2014
+modelr_2014 <- lm(log_avg_masked_rad_2014 ~ log_muslim + log_otherrel + log_village_area + daily_power_hours + state_name + log_muslim:state_name + log_otherrel:state_name, (data = data_03))
+# adding clustered standard errors
+vcovr_2014 <- vcovHC(modelr_2014, type = "HC")
+#2015
+modelr_2015 <- lm(log_avg_masked_rad_2015 ~ log_muslim + log_otherrel + log_village_area + daily_power_hours + state_name + log_muslim:state_name + log_otherrel:state_name, (data = data_03))
+# adding clustered standard errors
+vcovr_2015 <- vcovHC(modelr_2015, type = "HC")
+
+#2016
+modelr_2016 <- lm(log_avg_masked_rad_2016 ~ log_muslim + log_otherrel + log_village_area + daily_power_hours + state_name + log_muslim:state_name + log_otherrel:state_name, (data = data_03))
+# adding clustered standard errors
+vcovr_2016 <- vcovHC(modelr_2016, type = "HC")
+
+#2017
+modelr_2017 <- lm(log_avg_masked_rad_2017 ~ log_muslim + log_otherrel + log_village_area + daily_power_hours + state_name + log_muslim:state_name + log_otherrel:state_name, (data = data_03))
+# adding clustered standard errors
+vcovr_2017 <- vcovHC(modelr_2017, type = "HC")
+
+#2018
+modelr_2018 <- lm(log_avg_masked_rad_2018 ~ log_muslim + log_otherrel + log_village_area + daily_power_hours + state_name + log_muslim:state_name + log_otherrel:state_name, (data = data_03))
+# adding clustered standard errors
+vcovr_2018 <- vcovHC(modelr_2018, type = "HC")
+
+#2019
+modelr_2019 <- lm(log_avg_masked_rad_2019 ~ log_muslim + log_otherrel + log_village_area + daily_power_hours + state_name + log_muslim:state_name + log_otherrel:state_name, (data = data_03))
+# adding clustered standard errors
+vcovr_2019 <- vcovHC(modelr_2019, type = "HC")
+
+#2020
+modelr_2020 <- lm(log_avg_masked_rad_2020 ~ log_muslim + log_otherrel + log_village_area + daily_power_hours + state_name + log_muslim:state_name + log_otherrel:state_name, (data = data_03))
+# adding clustered standard errors
+vcovr_2020 <- vcovHC(modelr_2020, type = "HC")
+
+
+#2021
+modelr_2021 <- lm(log_avg_masked_rad_2021 ~ log_muslim + log_otherrel + log_village_area + daily_power_hours + state_name + log_muslim:state_name + log_otherrel:state_name, (data = data_03))
+# adding clustered standard errors
+vcovr_2021 <- vcovHC(modelr_2021, type = "HC")
+
+# create a list of models
+models_rel <- list(modelr_2013, modelr_2014, modelr_2015, modelr_2016, modelr_2017, modelr_2018, modelr_2019, modelr_2020, modelr_2021)
+vcov_listr <- list(vcovr_2013, vcovr_2014,vcovr_2015,vcovr_2016,vcovr_2017,vcovr_2018,vcovr_2019, vcovr_2020, vcovr_2021)
+
+# use stargazer to generate a table of regression results
+stargazer(models_rel, title = "OLS Regression Results - 2013 to 2021", align = TRUE, type="html", out = "All-years.html")
+stargazer(models_rel, 
+          title = "", 
+          type = "latex",
+          se = vcov_listr, 
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+          align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n"
+)
+
+
+```
+
+##APPENDIX TABLE FOR OLS - By Caste
+
+```{r}
+
+### TABLE 6 FOR OLS - Electricity Consumption by Caste: with Covariates
+
+#2013
+modelc_2013 <- lm(log_avg_masked_rad_2013 ~ log_SC + log_ST + log_village_area + daily_power_hours + state_name + log_SC:state_name + log_ST:state_name, (data = data_03))
+# adding clustered standard errors
+vcovc_2013 <- vcovHC(modelc_2013, type = "HC")
+
+#2014
+modelc_2014 <- lm(log_avg_masked_rad_2014 ~ log_SC + log_ST + log_village_area + daily_power_hours + state_name + log_SC:state_name + log_ST:state_name, (data = data_03))
+# adding clustered standard errors
+vcovc_2014 <- vcovHC(modelc_2014, type = "HC")
+#2015
+modelc_2015 <- lm(log_avg_masked_rad_2015 ~ log_SC + log_ST + log_village_area + daily_power_hours + state_name + log_SC:state_name + log_ST:state_name, (data = data_03))
+# adding clustered standard errors
+vcovc_2015 <- vcovHC(modelc_2015, type = "HC")
+
+#2016
+modelc_2016 <- lm(log_avg_masked_rad_2016 ~ log_SC + log_ST + log_village_area + daily_power_hours + state_name + log_SC:state_name + log_ST:state_name, (data = data_03))
+# adding clustered standard errors
+vcovc_2016 <- vcovHC(modelc_2016, type = "HC")
+
+#2017
+modelc_2017 <- lm(log_avg_masked_rad_2017 ~ log_SC + log_ST + log_village_area + daily_power_hours + state_name + log_SC:state_name + log_ST:state_name, (data = data_03))
+# adding clustered standard errors
+vcovc_2017 <- vcovHC(modelc_2017, type = "HC")
+
+#2018
+modelc_2018 <- lm(log_avg_masked_rad_2018 ~ log_SC + log_ST + log_village_area + daily_power_hours + state_name + log_SC:state_name + log_ST:state_name, (data = data_03))
+# adding clustered standard errors
+vcovc_2018 <- vcovHC(modelc_2018, type = "HC")
+
+#2019
+modelc_2019 <- lm(log_avg_masked_rad_2019 ~ log_SC + log_ST + log_village_area + daily_power_hours + state_name + log_SC:state_name + log_ST:state_name, (data = data_03))
+# adding clustered standard errors
+vcovc_2019 <- vcovHC(modelc_2019, type = "HC")
+
+#2020
+modelc_2020 <- lm(log_avg_masked_rad_2020 ~ log_SC + log_ST + log_village_area + daily_power_hours + state_name + log_SC:state_name + log_ST:state_name, (data = data_03))
+# adding clustered standard errors
+vcovc_2020 <- vcovHC(modelc_2020, type = "HC")
+
+
+#2021
+modelc_2021 <- lm(log_avg_masked_rad_2021 ~ log_SC + log_ST + log_village_area + daily_power_hours + state_name + log_SC:state_name + log_ST:state_name, (data = data_03))
+# adding clustered standard errors
+vcovc_2021 <- vcovHC(modelc_2021, type = "HC")
+
+# create a list of models
+models_cas <- list(modelc_2013, modelc_2014, modelc_2015, modelc_2016, modelc_2017, modelc_2018, modelc_2019, modelc_2020, modelc_2021)
+vcov_listc <- list(vcovc_2013, vcovc_2014,vcovc_2015,vcovc_2016,vcovc_2017,vcovc_2018,vcovc_2019, vcovc_2020, vcovc_2021)
+
+# use stargazer to generate a table of regression results
+stargazer(models_cas, title = "OLS Regression Results - 2013 to 2021", align = TRUE, type="html", out = "All-years.html")
+stargazer(models_cas, 
+          title = "", 
+          type = "latex",
+          se = vcov_listc, 
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+          align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n"
+)
+```
+
+#6. Regression Analysis - Fixed Effects
+
+##Step 1: Load and Prepare Data
+```{r prepare_variables, echo=FALSE}
+
+pdata <- read.csv("./Data/Thesis_Panel.csv")
+
+# Add the proportion table to the data frame
+pdata <- pdata %>% 
+  mutate(pop_ST_prop = round((pop_ST / total_pop) * 100,2),
+         pop_SC_prop = round((pop_SC / total_pop) * 100,2),
+         pop_others_prop = round((pop_others / total_pop) * 100,2),
+         pop_lit_prop = round((pop_literate / total_pop) * 100,2),
+         pop_muslim_prop = round((pop_muslim / total_pop) * 100,2),
+         pop_hindu_prop = round((pop_hindu / total_pop) * 100,2),
+         pop_otherrel_prop = round((pop_otherrel / total_pop) * 100,2),
+         pop_rel_minorities_prop = round(((pop_muslim + pop_otherrel)/total_pop)*100, 2),
+         pop_cas_minorities_prop = round(((pop_ST + pop_SC)/total_pop)*100,2))
+
+# Make dummy variables for SC, ST, and Muslim dominant population
+pdata  <- pdata  %>% #identify change
+  group_by(year, subdistrict_id)%>%
+          mutate(Major_SC = ifelse(pop_SC_prop >= 0.5,  Major_SC <- 1, Major_SC <- 0), # the subdistrict has over 50% SC population or not
+                 Major_ST = ifelse(pop_ST_prop>= 0.5, Major_ST <- 1, Major_ST <- 0), # the subdistrict has over 50% ST population or not
+         Major_muslim = ifelse(pop_muslim_prop >= 0.5, Major_muslim <- 1, Major_muslim <- 0), # the subdistrict has over 50% muslim population or not
+         Major_hindu = ifelse(pop_hindu_prop >= 0.5, Major_hindu <- 1, Major_hindu <- 0)) #the subdistrict has over 50% hindu population or not
+
+
+# Add log transformed columns for all population data and for nightlight radiance
+pdata <- pdata %>% 
+  mutate(log_SC = log(pop_SC), log_ST = log1p(pop_ST), log_muslim = log(pop_muslim), log_literate= log(pop_literate), log_hindu= log(pop_hindu), log_others = log(pop_others), log_otherrel = log(pop_otherrel), log_avg_rad = log1p(ntl_avg_masked_rad), log_total_pop = log(total_pop), log_male = log(pop_male), log_female = log(pop_female), log_village_area = log(village_area_hectares)) 
+
+# Check for duplicate observations
+duplicates <- duplicated(pdata)
+
+# Print the number of duplicate observations
+cat("Number of duplicate observations: ", sum(duplicates))
+
+modelnew <- pdata %>% filter(year==2012)
+#coplot( log_literate~ log_num_households|state_name, type="b", data=modelnew)
+
+```
+
+##Step 2: Preparation plots of independent and dependent variables
+```{r scatterfe, echo=FALSE}
+LState <- pdata %>% ggplot(., aes(x=state_name, y=log_avg_rad)) +
+  geom_point() +
+    xlab("State") +
+  ylab("log Annual electricity consumption")
+
+
+LYear <- pdata %>% ggplot(., aes(x=year, y=log_avg_rad)) +
+  geom_point() +
+    xlab("Year") +
+  ylab("log Annual electricity consumption")
+
+
+LMuslim <- ggplot(pdata, aes(x = log_muslim, y = log_avg_rad)) +
+  geom_point() +
+  xlab("log of Muslim Population") +
+  ylab("log Annual electricity consumption")
+
+LHindu <- ggplot(pdata, aes(x = log_hindu, y = log_avg_rad)) +
+  geom_point() +
+  xlab("log of Hindu Population") +
+  ylab("log Annual electricity consumption")
+
+LSC <- ggplot(pdata, aes(x = log_SC, y = log_avg_rad)) +
+  geom_point() +
+  xlab("log of SC Population") +
+  ylab("log Annual electricity consumption")
+
+LST <- ggplot(pdata, aes(x = log_ST, y = log_avg_rad)) +
+  geom_point() +
+  xlab("log of ST Population") +
+  ylab("log Annual electricity consumption")
+
+
+#Checking relationship of variables included
+fe_scatterplot <- grid.arrange(LState, LYear, LMuslim, LHindu, LSC, LST,  nrow = 3, ncol = 2)
+fe_scatterplot
+
+
+##corelation plots
+
+coplot(ntl_avg_masked_rad ~ year|state_name, type="b", data=pdata)
+
+#heterogeneity between the states
+
+png(height=600, width=600, pointsize = 15, 
+    file= here("Output","NTLstate.png"), type = "cairo")
+NTLstate <- plotmeans(ntl_avg_masked_rad ~ state_name, main="Heterogeineity across states", data=pdata)
+dev.off()
+
+#heterogeneity between the years
+png(height=600, width=600, pointsize = 15, 
+    file= here("Output","NTLyears.png"), type = "cairo")
+NTLyears <- plotmeans(ntl_avg_masked_rad ~ year, main="Heterogeineity across years", data=pdata)
+dev.off()
+
+```
+
+#Step 3. FE Assumptions
+
+#S3.1: Breusch-Pagan Test for Heteroskedacity in the models model (appendix)
+
+```{r Bruesch-Pagan, echo=FALSE}
+
+#Breusch-Pagan test for Homoskedacity
+bptest(log_avg_rad~log_muslim + as.factor(uid), data = pdata, studentize = FALSE)
+bptest(log_avg_rad~log_hindu + as.factor(uid), data = pdata, studentize = FALSE)
+bptest(log_avg_rad~log_SC + as.factor(uid), data = pdata, studentize = FALSE)
+bptest(log_avg_rad~log_ST + as.factor(uid), data = pdata, studentize = FALSE)
+
+```
+
+#3.2: Breusch-Godfrey autocorrelation test for FE model (appendix)
+
+```{r Breusch-Godfrey autocorrelation test for FE model, echo=FALSE}
+
+#Define model
+pbg1 <- plm(log_avg_rad ~ log_muslim, index = c( "uid", "year"), model = "within", data=pdata)
+pbg2 <- plm(log_avg_rad ~ log_hindu, index = c( "uid", "year"), model = "within", data=pdata)
+pbg3 <- plm(log_avg_rad ~ log_SC, index = c( "uid", "year"), model = "within", data=pdata)
+pbg4 <- plm(log_avg_rad ~ log_ST, index = c( "uid", "year"), model = "within", data=pdata)
+
+#BG test- Breusch-Godfrey/Wooldridge test for serial correlation in panel models, p-value < 0.05, alternative hypothesis: serial correlation in idiosyncratic errors
+pbgtest(pbg1)
+pbgtest(pbg2)
+pbgtest(pbg3)
+pbgtest(pbg4)
+
+```
+
+
+##3.3: Check for Homoskedasticity (visually, not used in main thesis)
+
+```{r homoskedacity_year, echo=FALSE}
+
+pdata_2012 <- pdata_2012 %>% 
+  mutate(log_pop_SC = log(pop_SC), log_pop_ST = log1p(pop_ST), log_pop_muslim = log(pop_muslim), log_pop_literate= log(pop_literate), log_pop_hindu= log(pop_hindu), log_pop_others = log(pop_others), log_rad = log(avg_masked_rad), log_total_pop = log(total_pop)) 
+model <- lm(log_rad ~ log_pop_SC + log_pop_ST + log_pop_muslim + log_pop_muslim*state_name, (data = pdata_2012))
+model <- plm(log_rad ~ log_pop_muslim + as.factor(year),
+      index = c( "uid"), model = "within", data=p1)
+summary(model)
+fitted_mod <- fitted(model)
+resid_mod <- sqrt(abs(rstandard(model)))
+df <- data.frame(fitted_mod, resid_mod)
+ggplot(data=df, aes(x=fitted_mod, y=resid_mod)) + geom_point()
+length(fitted_values_mod )
+
+#Homoskedacity
+ggplot(df, aes(x=fitted_mod, y=resid_mod)) +
+  geom_boxplot()
+tdata<- pdata_2012
+tdata <- tdata %>% 
+  mutate(yhat = fitted(model, individual = FALSE),
+         res_sqrt = sqrt(abs(rstandard(model))))
+
+  ggplot(df, aes(fitted_mod, resid_mod)) +
+  geom_point() +
+    geom_smooth()
+
+class(pdata_2012)
+
+    ggplot(data, aes(year, res_sqrt)) + 
+  geom_point() +
+  stat_summary(geom = "line", fun = mean, color = "blue")
+```
+
+
+##Step 4: Choosing fe model over OLS and random effects model
+```{r femodels, echo=FALSE}
+
+#Model 1 = Statewise electricity consumption
+fe_oneway <- pdata%>% 
+    plm(log_avg_rad ~ state_name +  log_literate +log_female + log_male,
+      index = c( "year", "uid"), model = "within", data=.)
+fe_twoway <- pdata%>% 
+    plm(log_avg_rad ~ state_name +  log_literate +log_female + log_male,
+      index = c( "year", "uid"), model = "within",  data=.)
+#summary(pmodel1)
+
+
+#OLS model
+ ols <-lm(log_avg_rad ~ as.factor(state_name), data=pdata)
+summary(ols)
+#test on OLS vs Fixed effects model
+ pFtest(fe_oneway, ols)
+ 
+ #random model
+random <- plm(log_avg_rad ~ as.factor(state_name) +  log_literate +log_female + log_male,
+      index = c( "year", "uid"), model = "random", data=pdata)
+summary(random) 
+
+##test on random vs fixed effects model
+phtest(fe_oneway, random)
+phtest(fe_twoway, random)
+
+
+  #coeftest specific small sample correction, sss type for reporting clustered standard error:
+ ### coeftest(pmodel1, function(x) vcovHC(x, type = 'sss'))
+  #coeftest for reporting clustered standard error:
+ ### coeftest(pmodel1, vcovHC(pmodel1, type = 'HC0', cluster = 'group'))
+```
+
+
+#Step 5: FE models for state
+```{r}
+
+###With clustering standard errors
+pmodel1 <- pdata %>%
+plm(log_avg_rad ~ state_name,
+index = c( "year", "uid"), model = "within", data=.)
+summary(pmodel1)
+#1. Breusch-Pagan test for Homoskedacity, p-value < 0.05, alternative hypothesis: heteroskedacity
+bptest(log_avg_rad~state_name + as.factor(uid), data = pdata, studentize = FALSE)
+
+#2.	Breusch-Godfrey/Wooldridge test for serial correlation in panel models, p-value < 0.05,
+pbgtest(pmodel1) 
+
+pmodel2 <- pdata %>%
+plm(log_avg_rad ~ state_name*log_male,
+index = c( "year", "uid"), model = "within",   data=.)
+pmodel3 <- pdata %>%
+plm(log_avg_rad ~ state_name*log_literate,
+index = c( "year", "uid"), model = "within",   data=.)
+pmodel4 <- pdata %>%
+plm(log_avg_rad ~ state_name*log_village_area,
+index = c( "year", "uid"), model = "within",   data=.)
+
+#clustering standard errors
+cluster1 <- vcovHC(pmodel1, method = "arellano", cluster="group")
+cluster2 <- vcovHC(pmodel2, method = "arellano", cluster="group")
+cluster3 <- vcovHC(pmodel3, method = "arellano", cluster="group")
+cluster4 <- vcovHC(pmodel4, method = "arellano", cluster="group")
+
+#r output
+stargazer(pmodel1, pmodel2, pmodel3, pmodel4,  title = "FE Regression for State-level", type = "text",
+se = list(cluster1, cluster2, cluster3, cluster4), omit.stat = c("f", "ser"),
+star.cutoffs = c(0.05, 0.01, 0.001), header = FALSE)
+#latex readable output
+stargazer(pmodel1, pmodel2, pmodel3, pmodel4, 
+          title = "", 
+          type = "latex",
+          se = list(cluster1, cluster2, cluster3, cluster4), 
+          omit.stat = c("f", "ser"),
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+           align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n" )
+
+
+```
+
+#Step 5: FE models by Religion
+```{r}
+
+###With clustering standard errors
+pmodel1 <- pdata %>%
+plm(log_avg_rad ~ log_muslim*log_female + log_muslim*log_literate ,
+model = "within", index = c("uid", "year"),  data=.)
+pmodel2 <- pdata %>%
+plm(log_avg_rad ~ log_otherrel*log_female + log_otherrel*log_literate ,
+model = "within", index = c("uid", "year"),   data=.)
+pmodel3 <- pdata %>%
+plm(log_avg_rad ~ log_muslim*log_village_area + log_otherrel*log_village_area + daily_power_hours + power_use_all + log_hindu*log_village_area,
+index = c( "year", "uid"), model = "within",   data=.)
+
+#clustering standard errors
+cluster1 <- vcovHC(pmodel1, method = "arellano", cluster="group")
+cluster2 <- vcovHC(pmodel2, method = "arellano", cluster="group")
+cluster3 <- vcovHC(pmodel3, method = "arellano", cluster="group")
+
+#output in text
+stargazer(pmodel1, pmodel2, pmodel3,  title = "FE Regression for Religions", type = "text",
+se = list(cluster1, cluster2, cluster3), omit.stat = c("f", "ser"),
+star.cutoffs = c(0.05, 0.01, 0.001), header = FALSE)
+
+#output in latex
+stargazer(pmodel1, pmodel2, pmodel3,
+          title = "", 
+          type = "latex",
+          se = list(cluster1, cluster2, cluster3), 
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+           align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n" )
+
+
+
+```
+
+##Step 6: FE models by Caste
+```{r}
+# Model 3 Caste
+
+pmodel1 <- pdata %>%
+plm(log_avg_rad ~ log_SC + log_ST,
+index = c( "uid", "year"), model = "within",  data=.)
+
+pmodel2 <- pdata %>% #controls for SC
+plm(log_avg_rad ~ log_SC*log_village_area + log_SC*log_female + log_SC*log_literate ,
+index = c( "uid", "year"), model = "within",  data=.)
+
+pmodel3 <- pdata %>% #controls for ST
+plm(log_avg_rad ~ log_ST*log_village_area + log_ST*log_literate + log_ST*log_female,
+index = c( "uid", "year"), model = "within",  data=.)
+
+pmodel4 <- pdata %>% #combined model for SC and ST
+plm(log_avg_rad ~ log_SC*log_village_area + log_SC*log_female + log_SC*log_literate + log_ST*log_village_area + log_ST*log_literate + log_ST*log_female ,
+index = c( "uid", "year"), model = "within",  data=.)
+
+#clustering standard error
+cluster1 <- vcovHC(pmodel1, method = "arellano", cluster="group")
+cluster2 <- vcovHC(pmodel2, method = "arellano", cluster="group")
+cluster3 <- vcovHC(pmodel3, method = "arellano", cluster="group")
+cluster4 <- vcovHC(pmodel4, method = "arellano", cluster="group")
+
+#output in text
+stargazer(pmodel1, pmodel2, pmodel3, pmodel4,  title = "FE Regression for Caste", type = "text",
+se = list(cluster1, cluster2, cluster3, cluster4),
+star.cutoffs = c(0.05, 0.01, 0.001), header = FALSE)
+
+#output in latex
+stargazer(pmodel1, pmodel2, pmodel3, pmodel4, 
+          title = "", 
+          type = "latex",
+          se = list(cluster1, cluster2, cluster3, cluster4), 
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+           align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n" )
+
+```
+
+#Step 7: FE Model by Minorities (appendix)
+```{r}
+#Model 4: Minorities
+pmodel1 <- pdata %>%
+plm(log_avg_rad ~ log_SC + log_ST + log_muslim,
+index = c( "uid", "year"), model = "within",  data=.)
+cluster1 <- vcovHC(pmodel1, type = "HC0", method = "arellano", cluster="group")
+summary(pmodel1)
+stargazer(pmodel1, title = "FE Regression for Minorities", type = "text",
+star.cutoffs = c(0.05, 0.01, 0.001), header = FALSE)
+stargazer(pmodel1, 
+          title = "", 
+          type = "latex",
+          header = FALSE,
+          digits = 3,
+          font.size = "small",
+           align = TRUE,
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          omit.table.layout = "n" )
+
+
+
+```
+
+
+##Step 8: Visualisations for minorities
+```{r sd_plots}
+
+#Function for getting beta and sed dataframe
+beta_sed_df <- function(p, limit=10) {
+  betas <- numeric(limit)
+  for (i in seq_along(betas)) {
+    betas[i] <- p$coefficients[i]
+  }
+  se <- sqrt(diag(vcovHC(p, method = "arellano", type = "HC0", cluster = "group")))
+  sed <- as.vector(se)
+  sed <- sed[1:limit]
+  year <- c(2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021)
+  d <- data.frame(beta = betas, sed = sed, year)
+  return(d)
+}
+
+##defining distance for graphs
+pd <- position_dodge(width = 0.3)
+
+
+##Graph for Religion
+p1 <- pdata %>% 
+    plm(log_avg_rad ~ log_muslim*as.factor(year),
+      index = c( "year", "uid"), model = "within", data=.)
+
+p2 <- pdata %>% 
+    plm(log_avg_rad ~ log_SC*as.factor(year),
+      index = c( "year", "uid"), model = "within", data=.)
+
+p3 <- pdata %>% 
+    plm(log_avg_rad ~ log_ST*as.factor(year),
+      index = c( "year", "uid"), model = "within", data=.)
+
+
+d1 <- beta_sed_df(p1)
+d2 <- beta_sed_df(p2)
+d3 <- beta_sed_df(p3)
+
+
+df1 <- d1 %>% 
+  group_by(year) %>% 
+  summarise(Variable = "Muslim NTL rad", value = beta, lower=beta - sed, upper=beta + sed)
+df2 <- d2 %>% 
+  group_by(year) %>% 
+  summarise(Variable = "SC NTL rad", value = beta, lower=beta - sed, upper=beta + sed)
+df3 <- d3 %>% 
+  group_by(year) %>% 
+  summarise(Variable = "ST NTL rad", value = beta, lower=beta - sed, upper=beta + sed)
+
+df <- bind_rows(df1, df2, df3)
+
+plot1 <- ggplot(d1,aes(x = year, y = beta)) +
+  geom_point(data = df, aes(x = year, y = value, color = Variable), position=pd, width=0.1) +
+  geom_errorbar(data = df, aes(y = value, ymin = lower, ymax = upper, 
+                group = Variable, color = Variable), 
+                width=.2, position = pd) +
+  geom_smooth(data=df, aes(x=year, y=value, group=Variable, color=Variable),
+              method="lm", formula=y~x, se=FALSE) +
+  scale_color_brewer(labels = c("Muslim", "SC", "ST"), palette = "Set2") +
+  labs(x = "Year", y="Avg masked radiance", title = "2012-2021", col="Independent variable") +
+  theme_classic()
+plot1
+
+ggsave(file.path("C:/Users/ShefaliRoy/OneDrive - Hertie School/Documents/OneDrive - Hertie School/Thesis/Output",  "feminority.png"), plot = plot1, device = "png")
+```
+
+
