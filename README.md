@@ -34,6 +34,6 @@ The material in this repository is made available under the [MIT license](http:/
 
 ## Statement of contributions
 
-**Simon Munzert** prepared the practice material and post-processed the recording.
+**Hiba Ahmad** prepared the practice material and post-processed the recording.
 
-**Kermit the Frog** prepared the presentation slides and recording. He also provided an example to the practice material.
+**Shefali Roy** prepared the presentation slides and recording. He also provided an example to the practice material.
