@@ -1,4 +1,4 @@
-# Joint Master Thesis - Born into Darkness? Estimating Social Inequity in Electricity Consumption in India based
+# Joint Master Thesis - Born into Darkness? Estimating Social Inequity in Electricity Consumption in India
 
 
 ## **Executive Summary**
